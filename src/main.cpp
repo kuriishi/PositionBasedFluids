@@ -41,7 +41,7 @@ int main() {
 
     #ifdef ENABLE_PRESS_TO_START
     disableMouseMovement();
-    cout << "Press any key to start simulation" << endl;
+    cout << "Press ENTER to start simulation" << endl;
     cin.get();
     #endif
 

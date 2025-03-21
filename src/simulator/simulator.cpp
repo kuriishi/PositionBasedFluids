@@ -195,8 +195,10 @@ namespace simulator {
         }
         updateVelocityByPosition();
 
-        applyViscosity();
         applyVorticityConfinement();
+        applyViscosity();
+
+        handleBoundaryCollision();
 
         updateParticlePosition();
 
@@ -521,18 +523,18 @@ namespace simulator {
     int particlePositionInit() {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, particlePositionSSBO);
 
-        vector<vec4> particlePositionsVector(PARTICLE_COUNT);
+        vector<vec4> particlePositionVector(PARTICLE_COUNT);
         const real DIAMETER = PARTICLE_RADIUS * 2.0;
 
+        // Tow Dam Break
         unsigned int index = 0;
         real x = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
         for (unsigned int i = 0; i < PARTICLE_COUNT_PER_EDGE_XZ; i++) {
             real y = 20.0 * DIAMETER;
             for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y / 2; j++) {
                 real z = 0.5 * HORIZON_MAX_COORDINATE - 5.0 * DIAMETER;
-                // real z = 5.0 * DIAMETER;
                 for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {
-                    particlePositionsVector[index++] = vec4(x, y, z, 0.0);
+                    particlePositionVector[index++] = vec4(x, y, z, 0.0);
                     z -= DIAMETER;
                 }
                 y += DIAMETER;
@@ -544,9 +546,8 @@ namespace simulator {
             real y = 20.0 * DIAMETER;
             for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y / 2; j++) {
                 real z = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
-                // real z = -5.0 * DIAMETER;
                 for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {
-                    particlePositionsVector[index++] = vec4(x, y, z, 0.0);
+                    particlePositionVector[index++] = vec4(x, y, z, 0.0);
                     z += DIAMETER;
                 }
                 y += DIAMETER;
@@ -554,7 +555,23 @@ namespace simulator {
             x -= DIAMETER;
         }
 
-        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(vec4), particlePositionsVector.data(), GL_DYNAMIC_DRAW);
+        // One Dam Break
+        // unsigned int index = 0;
+        // real x = -0.5 * HORIZON_MAX_COORDINATE + 5 * DIAMETER;
+        // for (unsigned int i = 0; i < PARTICLE_COUNT_PER_EDGE_XZ; i++) {
+        //     real y = 50.0 * DIAMETER;
+        //     for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y; j++) {
+        //         real z = -0.5 * HORIZON_MAX_COORDINATE + 5 * DIAMETER;
+        //         for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {
+        //             particlePositionVector[index++] = vec4(x, y, z, 0.0);
+        //             z += DIAMETER;
+        //         }
+        //         y += DIAMETER;
+        //     }
+        //     x += DIAMETER;
+        // }
+
+        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(vec4), particlePositionVector.data(), GL_DYNAMIC_DRAW);
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 

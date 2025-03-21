@@ -11,11 +11,14 @@ using glm::vec3;
 using std::cout;
 using std::endl;
 
+// #define ENABLE_CURSOR
+
 namespace renderer {
     GLFWwindow* window;
 
     // camera
     Camera camera(vec3(0.0f, 0.75f, 2.5f));
+    // Camera camera(vec3(0.0f, 0.75f, -2.5f));
     real lastX = SCR_WIDTH / 2.0;
     real lastY = SCR_HEIGHT / 2.0;
     bool firstMouse = true;
@@ -41,7 +44,11 @@ namespace renderer {
         glfwSetCursorPosCallback(window, mouse_callback);
         glfwSetScrollCallback(window, scroll_callback);
 
+        #ifdef ENABLE_CURSOR
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        #else
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        #endif
 
         if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         {

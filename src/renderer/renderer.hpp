@@ -19,10 +19,9 @@ namespace renderer {
     int render();
     int renderTerminate();
 
-    int generateSphere(const unsigned int SEGMENTS);
-    int renderInitParticles();
-    int renderParticles();
-    int renderTerminateParticles();
+    int renderInitParticle();
+    int renderParticle();
+    int renderTerminateParticle();
 
     int renderInitSkybox();
     int renderSkybox();

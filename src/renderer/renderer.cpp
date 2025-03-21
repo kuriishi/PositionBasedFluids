@@ -5,12 +5,13 @@
 
 #include <iostream>
 #include <cmath>
-#include <iomanip>
+
 #include "../common/common.hpp"
 #include "shader.hpp"
 #include "window.hpp"
 #include "../simulator/simulator.hpp"
 
+using glm::vec4;
 using glm::mat3;
 using glm::mat4;
 using glm::translate;
@@ -24,9 +25,11 @@ using std::sin;
 using std::cos;
 
 using common::PI;
-using simulator::particlePositionsSSBO;
+using simulator::particlePositionSSBO;
 using simulator::PARTICLE_COUNT;
 using simulator::PARTICLE_RADIUS;
+
+#define ENABLE_PROCESS_INPUT
 
 namespace renderer {
     // skybox
@@ -86,17 +89,14 @@ namespace renderer {
     unsigned int skyboxTexture;
     Shader skyboxShader;
 
-    // sphere
-    vector<vec3> sphereVertices;
-    vector<unsigned int> sphereIndices;
-    unsigned int sphereIndexCount;
-    const unsigned int SPHERE_SEGMENTS = 64;
-    unsigned int sphereVBO;
-    unsigned int sphereEBO;
-
-    // particles
-    unsigned int particlesInstanceVAO;
-    Shader particlesShader;
+    // particle 
+    unsigned int particleVAO;
+    unsigned int particleVBO;
+    Shader particleShader;
+    
+    // FPS
+    int deltaTimeCounter = 0;
+    const int DELTA_TIME_COUNTER_MAX = 30;
 
     int renderInitSkybox() {
         glEnable(GL_DEPTH_TEST);
@@ -156,28 +156,20 @@ namespace renderer {
 
         return 0;
     }
+    
+    int renderInitParticle() {
+        particleShader = Shader("src/renderer/shader/particle.vert", "src/renderer/shader/particle.frag");
 
-    int renderInitParticles() {
-        generateSphere(SPHERE_SEGMENTS);
+        glGenVertexArrays(1, &particleVAO);
+        glGenBuffers(1, &particleVBO);
 
-        glEnable(GL_DEPTH_TEST);
-        particlesShader = Shader("src/renderer/shader/particles.vert", "src/renderer/shader/particles.frag");
+        glBindVertexArray(particleVAO);
 
-        glGenVertexArrays(1, &particlesInstanceVAO);
-        glGenBuffers(1, &sphereVBO);
-        glGenBuffers(1, &sphereEBO);
+        glBindBuffer(GL_ARRAY_BUFFER, particleVBO);
+        glBufferData(GL_ARRAY_BUFFER, PARTICLE_COUNT * sizeof(vec4), nullptr, GL_DYNAMIC_DRAW);
 
-        glBindVertexArray(particlesInstanceVAO);
-
-        glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
-        glBufferData(GL_ARRAY_BUFFER, sphereVertices.size() * sizeof(vec3), &sphereVertices[0], GL_STATIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(unsigned int), &sphereIndices[0], GL_STATIC_DRAW);
-
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(vec4), (void*)0);
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(1);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
@@ -185,21 +177,25 @@ namespace renderer {
         return 0;
     }
 
-    int renderParticles() {
-        particlesShader.use();
+    int renderParticle() {
+        glEnable(GL_PROGRAM_POINT_SIZE);
+        glEnable(GL_DEPTH_TEST);
 
-        mat4 model = mat4(1.0f);
-        model = scale(model, vec3(static_cast<float>(PARTICLE_RADIUS * 0.9)));
-        particlesShader.setMat4("model", model);
+        particleShader.use();
 
         mat4 view = camera.GetViewMatrix();
-        particlesShader.setMat4("view", view);
+        particleShader.setMat4("view", view);
 
         mat4 projection = perspective(radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-        particlesShader.setMat4("projection", projection);
+        particleShader.setMat4("projection", projection);       
 
-        mat3 normalMatrix = mat3(transpose(inverse(model)));
-        particlesShader.setMat3("normalMatrix", normalMatrix);
+        // matrix.inverse.transpose.inverse = matrix.transpose
+        mat4 viewMatrixTranspose = transpose(view);
+        particleShader.setMat4("viewMatrixTranspose", viewMatrixTranspose);
+
+        particleShader.setUint("HALF_PARTICLE_COUNT", PARTICLE_COUNT / 2);
+
+        particleShader.setFloat("POINT_SIZE", static_cast<float>(PARTICLE_RADIUS));
 
         vec3 lightDir = vec3(1.0f, 1.0f, 0.5f);
         vec3 lightColor = vec3(1.0f, 1.0f, 1.0f);
@@ -207,42 +203,40 @@ namespace renderer {
         float diffuse = 1.0f;
         float specular = 0.5f;
         float shininess = 64.0f;
-        particlesShader.setVec3("light.direction", lightDir);
-        particlesShader.setVec3("light.color", lightColor);
-        particlesShader.setFloat("light.ambient", ambient);
-        particlesShader.setFloat("light.diffuse", diffuse);
-        particlesShader.setFloat("light.specular", specular);
-        particlesShader.setFloat("light.shininess", shininess);
+        particleShader.setVec3("light.direction", lightDir);
+        particleShader.setVec3("light.color", lightColor);
+        particleShader.setFloat("light.ambient", ambient);
+        particleShader.setFloat("light.diffuse", diffuse);
+        particleShader.setFloat("light.specular", specular);
+        particleShader.setFloat("light.shininess", shininess);
 
         vec3 viewPos = camera.Position;
-        particlesShader.setVec3("viewPos", viewPos);
+        particleShader.setVec3("viewPos", viewPos);
 
-        vec3 objectColor = vec3(0.0f, 0.5f, 0.8f);
-        particlesShader.setVec3("objectColor", objectColor);
+        glBindBuffer(GL_COPY_READ_BUFFER, particlePositionSSBO);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, particleVBO);
+        glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, PARTICLE_COUNT * sizeof(vec4));
 
-        particlesShader.setUint("HALF_PARTICLE_COUNT", PARTICLE_COUNT / 2);
+        glBindVertexArray(particleVAO);
+        glDrawArrays(GL_POINTS, 0, PARTICLE_COUNT);
 
-        glBindVertexArray(particlesInstanceVAO);
-        glDrawElementsInstanced(GL_TRIANGLE_STRIP, sphereIndexCount, GL_UNSIGNED_INT, 0, PARTICLE_COUNT);
         glBindVertexArray(0);
 
         return 0;
     }
 
-    int renderTerminateParticles() {
-        glDeleteVertexArrays(1, &particlesInstanceVAO);
-        // glDeleteBuffers(1, &particlesInstanceVBO);
-        glDeleteBuffers(1, &sphereVBO);
-        glDeleteBuffers(1, &sphereEBO);
+    int renderTerminateParticle() {
+        glDeleteVertexArrays(1, &particleVAO);
 
-        sphereVertices.clear();
-        sphereIndices.clear();
+        glDeleteBuffers(1, &particleVBO);
+
+        glDeleteProgram(particleShader.ID);
 
         return 0;
     }
 
     int renderInit() {
-        renderInitParticles();
+        renderInitParticle();
         renderInitSkybox();
 
         return 0;
@@ -251,12 +245,14 @@ namespace renderer {
     int render() {
         computeDeltaTime();
 
+        #ifdef ENABLE_PROCESS_INPUT
         processInput(window);
+        #endif
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        renderParticles();
+        renderParticle();
         renderSkybox();
 
         glfwSwapBuffers(window);
@@ -266,7 +262,7 @@ namespace renderer {
     }
 
     int renderTerminate() {
-        renderTerminateParticles();
+        renderTerminateParticle();
         renderTerminateSkybox();
 
         return 0;
@@ -329,43 +325,6 @@ namespace renderer {
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
         return textureID;
-    }
-
-    int generateSphere(const unsigned int SEGMENTS) {
-        for (unsigned int x = 0; x < SEGMENTS; x++) {
-            for (unsigned int y = 0; y < SEGMENTS; y++) {
-                real xSegment = static_cast<real>(x) / static_cast<real>(SEGMENTS);
-                real ySegment = static_cast<real>(y) / static_cast<real>(SEGMENTS);
-                real xPos = cos(xSegment * 2.0f * PI) * sin(ySegment * PI);
-                real yPos = cos(ySegment * PI);
-                real zPos = sin(xSegment * 2.0f * PI) * sin(ySegment * PI);
-
-                // position
-                sphereVertices.push_back(vec3(xPos, yPos, zPos));
-                // normal
-                sphereVertices.push_back(vec3(xPos, yPos, zPos));
-            }
-        }
-
-        bool oddRow = false;
-        for (unsigned int y = 0; y < SEGMENTS; y++) {
-            if (!oddRow) {
-                for (unsigned int x = 0; x <= SEGMENTS; x++) {
-                    sphereIndices.push_back(y       * (SEGMENTS + 1) + x);
-                    sphereIndices.push_back((y + 1) * (SEGMENTS + 1) + x);
-                }
-            }
-            else {
-                for (int x = SEGMENTS; x >= 0; x--) {
-                    sphereIndices.push_back((y + 1) * (SEGMENTS + 1) + x);
-                    sphereIndices.push_back(y       * (SEGMENTS + 1) + x);
-                }
-            }
-            oddRow = !oddRow;
-        }
-        sphereIndexCount = static_cast<unsigned int>(sphereIndices.size());
-
-        return 0;
     }
 
 }
