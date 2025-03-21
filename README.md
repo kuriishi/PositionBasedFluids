@@ -5,7 +5,7 @@
 <p align="center">32k Particles Showcase 2</p>
 
 ## Introduction
-A position-based fluid simulation based on 3D spatial positioning, implemented with reference to the paper "Position Based Fluids" by Miles Macklin and Matthias Müller.
+A position based fluids implementation, reference to the paper "Position based fluids." by Miles Macklin and Matthias Müller.
 
 Rendering utilizes OpenGL point sprites, while simulation computations are performed using OpenGL Compute Shaders.
 
