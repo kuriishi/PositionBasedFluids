@@ -1,0 +1,41 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 1) buffer PositionPredict {
+    vec4 positionPredict[];
+};
+
+layout(std430, binding = 4) buffer CubeOffset {
+    uint cubeOffset[];
+};
+
+layout(std430, binding = 5) buffer ParticleIndexInCube {
+    uint particleIndexInCube[];
+};
+
+uniform float KERNEL_RADIUS;
+uniform float HORIZON_MAX_COORDINATE;
+uniform float MAX_HEIGHT;
+uniform uint PARTICLE_COUNT;
+
+int cubeCountXZ = int(ceil(HORIZON_MAX_COORDINATE / KERNEL_RADIUS));
+int cubeCountY = int(ceil(MAX_HEIGHT / KERNEL_RADIUS));
+ivec3 cubeIndexDot = ivec3(cubeCountXZ * cubeCountY, cubeCountXZ, 1);
+
+ivec3 getIndexInCube(uint index) {
+    vec3 positionInCube = (vec3(positionPredict[index]) + vec3(0.5 * HORIZON_MAX_COORDINATE, 0.0, 0.5 * HORIZON_MAX_COORDINATE)) / KERNEL_RADIUS;
+    ivec3 indexInCube = ivec3(int(floor(positionInCube.x)), int(floor(positionInCube.y)), int(floor(positionInCube.z)));
+    return indexInCube;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= PARTICLE_COUNT) {
+        return;
+    }
+    ivec3 indexInCube = getIndexInCube(index);
+    int cubeIndex = int(dot(indexInCube, cubeIndexDot));
+    uint offsetIndex = atomicAdd(cubeOffset[cubeIndex], 1);
+    particleIndexInCube[offsetIndex] = index;
+}

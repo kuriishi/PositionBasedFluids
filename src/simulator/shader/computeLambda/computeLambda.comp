@@ -1,0 +1,27 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 10) buffer Constraint {
+    float constraint[];
+};
+
+layout(std430, binding = 11) buffer ConstraintGradSquareSum {
+    float constraintGradSquareSum[];
+};
+
+layout(std430, binding = 12) buffer Lambda {
+    float lambda[];
+};
+
+uniform float RELAXATION_PARAMETER;
+uniform uint PARTICLE_COUNT;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= PARTICLE_COUNT) {
+        return;
+    }
+    float lambda_i = -constraint[index] / (constraintGradSquareSum[index] + RELAXATION_PARAMETER);
+    lambda[index] = lambda_i;
+}

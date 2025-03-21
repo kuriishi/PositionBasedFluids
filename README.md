@@ -1,5 +1,9 @@
-![pbf](pbf.gif)
+![pbf_32k](pbf_32k.gif)
+<center>32k Particles</center>
 
-A weak, unoptimized CPU version implementation of Position Based Fluids for algorithm verification. Optimization and acceleration will be addressed in a future GPU version using compute shaders or CUDA.
+![pbf_32k_blend](pbf_32k_blend.gif)
+<center>32k Particles (Blended)</center>
 
-Parallel acceleration is implemented using the std::execution::par_unseq strategy. While MSVC provides its implementation, g++ users may need to install dependency libraries like TBB. See CMakeLists.txt for other dependencies.
+A 3D position-based fluid simulation implementation based on the paper *"Position Based Fluids."* by Miles Macklin and Matthias Müller.
+
+Rendering implemented with OpenGL instancing, simulation computed using OpenGL Compute Shaders.

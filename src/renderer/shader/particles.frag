@@ -2,6 +2,7 @@
 
 in vec3 Normal;
 in vec3 FragPos;
+in vec3 aColor;
 
 out vec4 FragColor;
 
@@ -31,7 +32,8 @@ void main() {
     float spec = pow(max(dot(normal, halfDir), 0.0), light.shininess);
     vec3 specular = light.specular * spec * light.color;
 
-    vec3 result = (ambient + diffuse + specular) * objectColor;
+    // vec3 result = (ambient + diffuse + specular) * objectColor;
+    vec3 result = (ambient + diffuse + specular) * aColor;
 
     FragColor = vec4(result, 1.0f);
 

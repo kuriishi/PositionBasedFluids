@@ -1,0 +1,74 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 1) buffer PositionPredict {
+    vec4 positionPredict[];
+};
+
+layout(std430, binding = 2) buffer Velocity {
+    vec4 velocity[];
+};
+
+uniform float HORIZON_MAX_COORDINATE;
+uniform float RESTITUTION;
+uniform float FRICTION;
+uniform float MAX_HEIGHT;
+uniform uint PARTICLE_COUNT;
+
+void main() {
+    unsigned int index = gl_GlobalInvocationID.x;
+    if (index >= PARTICLE_COUNT) {
+        return;
+    }
+    float boundaryPadding = 0.1;
+
+    if (positionPredict[index].x <= -0.5 * HORIZON_MAX_COORDINATE + boundaryPadding) {
+        positionPredict[index].x = -0.5 * HORIZON_MAX_COORDINATE + boundaryPadding;
+        if (velocity[index].x < 0.0) {
+            velocity[index].x *= -RESTITUTION;
+            velocity[index].y *= FRICTION;
+            velocity[index].z *= FRICTION;
+        }
+    }
+    if (positionPredict[index].x >= 0.5 * HORIZON_MAX_COORDINATE - boundaryPadding) {
+        positionPredict[index].x = 0.5 * HORIZON_MAX_COORDINATE - boundaryPadding;
+        if (velocity[index].x > 0.0) {
+            velocity[index].x *= -RESTITUTION;
+            velocity[index].y *= FRICTION;
+            velocity[index].z *= FRICTION;
+        }
+    }
+    if (positionPredict[index].y <= 0.0 + boundaryPadding) {
+        positionPredict[index].y = 0.0 + boundaryPadding;
+        if (velocity[index].y < 0.0) {
+            velocity[index].y *= -RESTITUTION;
+            velocity[index].x *= FRICTION;
+            velocity[index].z *= FRICTION;
+        }
+    }
+    if (positionPredict[index].y >= MAX_HEIGHT - boundaryPadding) {
+        positionPredict[index].y = MAX_HEIGHT - boundaryPadding;
+        if (velocity[index].y > 0.0) {
+            velocity[index].y *= -RESTITUTION;
+            velocity[index].x *= FRICTION;
+            velocity[index].z *= FRICTION;
+        }
+    }
+    if (positionPredict[index].z <= -0.5 * HORIZON_MAX_COORDINATE + boundaryPadding) {
+        positionPredict[index].z = -0.5 * HORIZON_MAX_COORDINATE + boundaryPadding;
+        if (velocity[index].z < 0.0) {
+            velocity[index].z *= -RESTITUTION;
+            velocity[index].x *= FRICTION;
+            velocity[index].y *= FRICTION;
+        }
+    }
+    if (positionPredict[index].z >= 0.5 * HORIZON_MAX_COORDINATE - boundaryPadding) {
+        positionPredict[index].z = 0.5 * HORIZON_MAX_COORDINATE - boundaryPadding;
+        if (velocity[index].z > 0.0) {
+            velocity[index].z *= -RESTITUTION;
+            velocity[index].x *= FRICTION;
+            velocity[index].y *= FRICTION;
+        }
+    }
+}

@@ -27,6 +27,7 @@ namespace renderer {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
         window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Position Based Fluid", NULL, NULL);
         if (window == NULL)
@@ -47,6 +48,9 @@ namespace renderer {
             cout << "Failed to initialize GLAD" << endl;
             return -1;
         }
+
+        glEnable(GL_DEBUG_OUTPUT);
+        glDebugMessageCallback(debug_callback, nullptr);
 
         return 0;
     }
@@ -83,6 +87,13 @@ namespace renderer {
             camera.ProcessKeyboard(DOWN, static_cast<float>(deltaTime));
     }
 
+    bool mouseMovement = true;
+    void enableMouseMovement() {
+        mouseMovement = true;
+    }
+    void disableMouseMovement() {
+        mouseMovement = false;
+    }
     void mouse_callback(GLFWwindow* window, real xpos, real ypos) {
         if (firstMouse) {
             lastX = xpos;
@@ -96,7 +107,9 @@ namespace renderer {
         lastX = xpos;
         lastY = ypos;
 
-        camera.ProcessMouseMovement(static_cast<float>(xoffset), static_cast<float>(yoffset));
+        if (mouseMovement) {
+            camera.ProcessMouseMovement(static_cast<float>(xoffset), static_cast<float>(yoffset));
+        }
     }
 
     void scroll_callback(GLFWwindow* window, real xoffset, real yoffset) {
@@ -105,5 +118,9 @@ namespace renderer {
 
     void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
         glViewport(0, 0, width, height);
+    }
+
+    void debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam) {
+        cout << "[GL Debug] " << message << endl;
     }
 }

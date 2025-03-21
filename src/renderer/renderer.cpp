@@ -5,7 +5,7 @@
 
 #include <iostream>
 #include <cmath>
-
+#include <iomanip>
 #include "../common/common.hpp"
 #include "shader.hpp"
 #include "window.hpp"
@@ -24,7 +24,7 @@ using std::sin;
 using std::cos;
 
 using common::PI;
-using simulator::particlePositions;
+using simulator::particlePositionsSSBO;
 using simulator::PARTICLE_COUNT;
 using simulator::PARTICLE_RADIUS;
 
@@ -96,9 +96,8 @@ namespace renderer {
 
     // particles
     unsigned int particlesInstanceVAO;
-    unsigned int particlesInstanceVBO;
     Shader particlesShader;
-    
+
     int renderInitSkybox() {
         glEnable(GL_DEPTH_TEST);
         skyboxShader = Shader("src/renderer/shader/skybox.vert", "src/renderer/shader/skybox.frag");
@@ -165,7 +164,6 @@ namespace renderer {
         particlesShader = Shader("src/renderer/shader/particles.vert", "src/renderer/shader/particles.frag");
 
         glGenVertexArrays(1, &particlesInstanceVAO);
-        glGenBuffers(1, &particlesInstanceVBO);
         glGenBuffers(1, &sphereVBO);
         glGenBuffers(1, &sphereEBO);
 
@@ -181,13 +179,6 @@ namespace renderer {
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
         glEnableVertexAttribArray(1);
 
-        glBindBuffer(GL_ARRAY_BUFFER, particlesInstanceVBO);
-        glBufferData(GL_ARRAY_BUFFER, particlePositions.size() * sizeof(vec3), &particlePositions[0], GL_DYNAMIC_DRAW);
-        
-        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)0);
-        glEnableVertexAttribArray(2);
-
-        glVertexAttribDivisor(2, 1);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
@@ -197,12 +188,8 @@ namespace renderer {
     int renderParticles() {
         particlesShader.use();
 
-        // 更新粒子位置数据
-        glBindBuffer(GL_ARRAY_BUFFER, particlesInstanceVBO);
-        glBufferData(GL_ARRAY_BUFFER, particlePositions.size() * sizeof(vec3), &particlePositions[0], GL_DYNAMIC_DRAW);
-
         mat4 model = mat4(1.0f);
-        model = scale(model, vec3(static_cast<float>(PARTICLE_RADIUS)));
+        model = scale(model, vec3(static_cast<float>(PARTICLE_RADIUS * 0.9)));
         particlesShader.setMat4("model", model);
 
         mat4 view = camera.GetViewMatrix();
@@ -233,6 +220,8 @@ namespace renderer {
         vec3 objectColor = vec3(0.0f, 0.5f, 0.8f);
         particlesShader.setVec3("objectColor", objectColor);
 
+        particlesShader.setUint("HALF_PARTICLE_COUNT", PARTICLE_COUNT / 2);
+
         glBindVertexArray(particlesInstanceVAO);
         glDrawElementsInstanced(GL_TRIANGLE_STRIP, sphereIndexCount, GL_UNSIGNED_INT, 0, PARTICLE_COUNT);
         glBindVertexArray(0);
@@ -242,7 +231,7 @@ namespace renderer {
 
     int renderTerminateParticles() {
         glDeleteVertexArrays(1, &particlesInstanceVAO);
-        glDeleteBuffers(1, &particlesInstanceVBO);
+        // glDeleteBuffers(1, &particlesInstanceVBO);
         glDeleteBuffers(1, &sphereVBO);
         glDeleteBuffers(1, &sphereEBO);
 
@@ -253,8 +242,6 @@ namespace renderer {
     }
 
     int renderInit() {
-        windowInit();
-
         renderInitParticles();
         renderInitSkybox();
 
@@ -263,6 +250,7 @@ namespace renderer {
 
     int render() {
         computeDeltaTime();
+
         processInput(window);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -280,8 +268,6 @@ namespace renderer {
     int renderTerminate() {
         renderTerminateParticles();
         renderTerminateSkybox();
-
-        windowTerminate();
 
         return 0;
     }

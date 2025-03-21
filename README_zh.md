@@ -1,5 +1,9 @@
-![pbf](pbf.gif)
+![pbf_32k](pbf_32k.gif)
+<center> 32k粒子 </center>
 
-一个较弱的、未经优化的CPU版本实现的Position Based Fluids，用以验证算法。优化和加速的工作之后将使用compute shader或者cuda在GPU版本中进行。
+![pbf_32k_blend](pbf_32k_blend.gif)
+<center> 32k粒子混合 </center>
 
-使用std::execution::par_unseq策略进行并行加速，MSVC提供了其实现，若使用g++，可能需要安装依赖库如TBB。其余依赖见CMakeLists.txt。
+基于3D位置的流体模拟，参照Miles Macklin与Matthias Müller的论文 *"Position based fluids."* 实现。
+
+渲染使用OpenGL实例化，模拟计算使用OpenGL Compute Shader。

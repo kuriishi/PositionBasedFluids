@@ -24,4 +24,8 @@ namespace renderer {
     void scroll_callback(GLFWwindow* window, real xoffset, real yoffset);
     void mouse_callback(GLFWwindow* window, real xpos, real ypos);
     void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+    void debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
+
+    void enableMouseMovement();
+    void disableMouseMovement();
 }

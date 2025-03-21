@@ -1,0 +1,34 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 3) buffer ParticleCountPerCube {
+    uint particleCountPerCube[];
+};
+
+layout(std430, binding = 4) buffer CubeOffset {
+    uint cubeOffset[];
+};
+
+layout(std430, binding = 6) buffer BlockOffset {
+    uint blockOffset[];
+};
+
+uniform uint CUBE_COUNT_SQRT;
+uniform uint CUBE_COUNT;
+
+void main() {
+    uint blockIndex = gl_GlobalInvocationID.x;
+    uint cubeIndex = blockIndex * CUBE_COUNT_SQRT;
+    if (blockIndex >= CUBE_COUNT_SQRT || cubeIndex >= CUBE_COUNT) {
+        return;
+    }
+
+    cubeOffset[cubeIndex] = 0;
+    blockOffset[blockIndex] = 0;
+    for (uint i = 1; i < CUBE_COUNT_SQRT && cubeIndex + i < CUBE_COUNT; i++) {
+        cubeOffset[cubeIndex + i] = cubeOffset[cubeIndex + i - 1] + particleCountPerCube[cubeIndex + i - 1];
+        blockOffset[blockIndex] += particleCountPerCube[cubeIndex + i - 1];
+    }
+    blockOffset[blockIndex] += particleCountPerCube[cubeIndex + CUBE_COUNT_SQRT - 1];
+}
