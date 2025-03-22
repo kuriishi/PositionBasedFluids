@@ -10,7 +10,7 @@
 渲染使用OpenGL点精灵，模拟计算使用OpenGL Compute Shader。
 
 ## 性能
-CPU: AMD 8825HS
+CPU: AMD 8845HS
 
 GPU: AMD 780M 
 

@@ -10,7 +10,7 @@ A position based fluids implementation, reference to the paper "Position based f
 Rendering utilizes OpenGL point sprites, while simulation computations are performed using OpenGL Compute Shaders.
 
 ## Performance
-CPU: AMD 8825HS
+CPU: AMD 8845HS
 
 GPU: AMD 780M 
 
