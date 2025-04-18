@@ -6,24 +6,16 @@
 
 #include "camera.hpp"
 
-using glm::vec3;
-
-using std::cout;
-using std::endl;
-
-// #define ENABLE_CURSOR
-
 namespace renderer {
     GLFWwindow* window;
 
     // camera
-    Camera camera(vec3(0.0f, 0.75f, 2.5f));
-    // Camera camera(vec3(0.0f, 0.75f, -2.5f));
-    real lastX = SCR_WIDTH / 2.0;
-    real lastY = SCR_HEIGHT / 2.0;
+    Camera camera(glm::vec3(0.0f, 1.5f, 2.5f), glm::vec3(0.0f, 0.0f, -1.0f));
+    common::real lastX = SCR_WIDTH / 2.0;
+    common::real lastY = SCR_HEIGHT / 2.0;
     bool firstMouse = true;
-    real lastFrame = 0.0;
-    real deltaTime = 0.0;
+    common::real lastFrame = 0.0;
+    common::real deltaTime = 0.0;
 
     int windowInit() {
         glfwInit();
@@ -35,7 +27,7 @@ namespace renderer {
         window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Position Based Fluid", NULL, NULL);
         if (window == NULL)
         {
-            cout << "Failed to create GLFW window" << endl;
+            std::cerr << "Failed to create GLFW window" << std::endl;
             glfwTerminate();
             return -1;
         }
@@ -44,20 +36,20 @@ namespace renderer {
         glfwSetCursorPosCallback(window, mouse_callback);
         glfwSetScrollCallback(window, scroll_callback);
 
-        #ifdef ENABLE_CURSOR
+        disableMouseMovement();
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-        #else
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        #endif
 
         if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         {
-            cout << "Failed to initialize GLAD" << endl;
+            std::cerr << "Failed to initialize GLAD" << std::endl;
             return -1;
         }
 
-        glEnable(GL_DEBUG_OUTPUT);
-        glDebugMessageCallback(debug_callback, nullptr);
+        // glEnable(GL_DEBUG_OUTPUT);
+        // glDebugMessageCallback(debug_callback, nullptr);
+        glDisable(GL_DEBUG_OUTPUT);
+
+        glFinish();
 
         return 0;
     }
@@ -65,11 +57,13 @@ namespace renderer {
     int windowTerminate() {
         glfwTerminate();
 
+        glFinish();
+
         return 0;
     }
 
-    real computeDeltaTime() {
-        real currentFrame = static_cast<real>(glfwGetTime());
+    common::real computeDeltaTime() {
+        common::real currentFrame = static_cast<common::real>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
@@ -77,9 +71,50 @@ namespace renderer {
     }
 
     void processInput(GLFWwindow *window) {
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-            glfwSetWindowShouldClose(window, true);
+        // hide GUI
+        static bool pressedH = false;
+        if (glfwGetKey(window, GLFW_KEY_H) == GLFW_PRESS) {
+            if (!pressedH) {
+                pressedH = true;
+                common::hideGUI = !common::hideGUI;
+            }
+        }
+        else {
+            pressedH = false;
+        }
 
+        // reset simulation
+        static bool pressedR = false;
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+            if (!pressedR) {
+                pressedR = true;
+                common::resetSimulation = true;
+            }
+        }
+        else {
+            pressedR = false;
+        }
+
+        // stop simulation
+        static bool pressedQ = false;
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+            if (!pressedQ) {
+                pressedQ = true;
+                common::enableSimulation = !common::enableSimulation;
+            }
+        }
+        else {
+            pressedQ = false;
+        }
+    }
+
+    void processCameraInput(GLFWwindow *window) {
+        // escape
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+            common::enableCameraMovement = false;
+        }
+
+        // move
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
             camera.ProcessKeyboard(FORWARD, static_cast<float>(deltaTime));
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -101,15 +136,15 @@ namespace renderer {
     void disableMouseMovement() {
         mouseMovement = false;
     }
-    void mouse_callback(GLFWwindow* window, real xpos, real ypos) {
+    void mouse_callback(GLFWwindow* window, common::real xpos, common::real ypos) {
         if (firstMouse) {
             lastX = xpos;
             lastY = ypos;
             firstMouse = false;
         }
 
-        real xoffset = xpos - lastX;
-        real yoffset = lastY - ypos;
+        common::real xoffset = xpos - lastX;
+        common::real yoffset = lastY - ypos;
         
         lastX = xpos;
         lastY = ypos;
@@ -119,7 +154,7 @@ namespace renderer {
         }
     }
 
-    void scroll_callback(GLFWwindow* window, real xoffset, real yoffset) {
+    void scroll_callback(GLFWwindow* window, common::real xoffset, common::real yoffset) {
         camera.ProcessMouseScroll(static_cast<float>(yoffset));
     }
 
@@ -128,6 +163,6 @@ namespace renderer {
     }
 
     void debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam) {
-        cout << "[GL Debug] " << message << endl;
+        std::cerr << "[GL Debug] " << message << std::endl;
     }
 }

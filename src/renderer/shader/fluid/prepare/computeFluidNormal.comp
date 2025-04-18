@@ -1,0 +1,50 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(binding = 0, r32f) uniform readonly image2D fluidSmoothedDepthTexture;
+layout(binding = 1, rgba32f) uniform writeonly image2D fluidNormalViewSpaceTexture;
+
+uniform int SCR_WIDTH;
+uniform int SCR_HEIGHT;
+
+uniform mat4 projectionInverse;
+
+vec3 getPosViewSpace(ivec2 texelCoord) {
+    vec3 posNDCSpace = vec3(texelCoord / vec2(SCR_WIDTH, SCR_HEIGHT), imageLoad(fluidSmoothedDepthTexture, texelCoord).r);
+    posNDCSpace = (posNDCSpace - 0.5) * 2.0;
+
+    vec4 posTmp = projectionInverse * vec4(posNDCSpace, 1.0);
+    return posTmp.xyz / posTmp.w;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    ivec2 texelCoord = ivec2(index % SCR_WIDTH, index / SCR_HEIGHT);
+    if (texelCoord.x >= SCR_WIDTH || texelCoord.y >= SCR_HEIGHT) {
+        return;
+    }
+
+    vec3 posViewSpace = getPosViewSpace(texelCoord);
+    vec3 posPositiveX = getPosViewSpace(texelCoord + ivec2(1, 0));
+    vec3 posNegativeX = getPosViewSpace(texelCoord + ivec2(-1, 0));
+    vec3 posPositiveY = getPosViewSpace(texelCoord + ivec2(0, 1));
+    vec3 posNegativeY = getPosViewSpace(texelCoord + ivec2(0, -1));
+
+    vec3 tangentX = posViewSpace - posNegativeX;
+    vec3 tangentY = posViewSpace - posNegativeY;
+    if (abs(posPositiveX.z - posViewSpace.z) < abs(posNegativeX.z - posViewSpace.z)) {
+        tangentX = posPositiveX - posViewSpace;
+    } else {
+        tangentX = posViewSpace - posNegativeX;
+    }
+    if (abs(posPositiveY.z - posViewSpace.z) < abs(posNegativeY.z - posViewSpace.z)) {
+        tangentY = posPositiveY - posViewSpace;
+    } else {
+        tangentY = posViewSpace - posNegativeY;
+    }
+
+    vec3 normal = normalize(cross(tangentX, tangentY));
+
+    imageStore(fluidNormalViewSpaceTexture, texelCoord, vec4(normal, 1.0));
+}

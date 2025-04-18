@@ -10,7 +10,9 @@ set(SOURCE_DIRS
     src/renderer
     src/simulator
     src/common
+    src/gui
     include
+    include/imgui
 )
 
 foreach(DIR ${SOURCE_DIRS})

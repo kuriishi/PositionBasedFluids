@@ -3,19 +3,20 @@
 #include <vector>
 #include <iostream>
 
-#include "compute_shader.hpp"
-
-using glm::vec4;
-
-using std::vector;
-using std::cout;
-using std::endl;
-
-using common::PI;
+#include "../common/compute_shader.hpp"
+#include "../common/performance_log.hpp"
 
 namespace simulator {
-    const GLuint INVOCATION_PER_WORKGROUP = 256;
-    const GLuint MAX_NEIGHBOR_COUNT = 64;
+    // gui parameters
+    int constraintProjectionIteration = 4;
+    float viscosityParameter = 0.005f;
+    float vorticityParameter = 0.0f; 
+    int maxNeighborCount = 160;
+    common::real horizonMaxCoordinate = HORIZON_MAX_COORDINATE;
+
+    // performance log
+    const unsigned int QUERY_START_INDEX = 1;
+
     const GLuint CUBE_COUNT = GLuint(ceil(HORIZON_MAX_COORDINATE / KERNEL_RADIUS)) * GLuint(ceil(HORIZON_MAX_COORDINATE / KERNEL_RADIUS)) * GLuint(ceil(MAX_HEIGHT / KERNEL_RADIUS));
     const GLuint CUBE_COUNT_SQRT = GLuint(ceil(sqrt(CUBE_COUNT)));
 
@@ -29,7 +30,7 @@ namespace simulator {
     GLuint particleIndexInCubeSSBO;
 
     GLuint neighborCountPerParticleSSBO;
-    GLuint particleIndexInNeighborSSBO;
+    GLuint neighborIndexBufferSSBO;
 
     GLuint densitySSBO;
     GLuint constraintSSBO;
@@ -53,8 +54,7 @@ namespace simulator {
     ComputeShader computeOffsetByBlockOffsetCS;
     ComputeShader assignParticleToCubeCS;
 
-    ComputeShader clearNeighborCountPerParticleCS;
-    ComputeShader assignNeighborToParticleCS;
+    ComputeShader searchNeighborFromCubeCS;
 
     ComputeShader computeDensityCS;
     ComputeShader computeConstraintCS;
@@ -74,13 +74,13 @@ namespace simulator {
     int simulateInit() {
         glGenBuffers(1, &particlePositionSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, particlePositionSSBO);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(vec4), nullptr, GL_DYNAMIC_DRAW);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
         glGenBuffers(1, &positionPredictSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, positionPredictSSBO);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(vec4), nullptr, GL_DYNAMIC_DRAW);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
         glGenBuffers(1, &velocitySSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, velocitySSBO);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(vec4), nullptr, GL_DYNAMIC_DRAW);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
 
         glGenBuffers(1, &particleCountPerCubeSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleCountPerCubeSSBO);
@@ -98,9 +98,9 @@ namespace simulator {
         glGenBuffers(1, &neighborCountPerParticleSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, neighborCountPerParticleSSBO);
         glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(GLuint), nullptr, GL_DYNAMIC_DRAW);
-        glGenBuffers(1, &particleIndexInNeighborSSBO);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleIndexInNeighborSSBO);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * MAX_NEIGHBOR_COUNT * sizeof(GLuint), nullptr, GL_DYNAMIC_DRAW);
+        glGenBuffers(1, &neighborIndexBufferSSBO);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, neighborIndexBufferSSBO);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * maxNeighborCount * sizeof(GLuint), nullptr, GL_DYNAMIC_DRAW);
 
         glGenBuffers(1, &densitySSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, densitySSBO);
@@ -117,11 +117,11 @@ namespace simulator {
 
         glGenBuffers(1, &deltaPositionSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, deltaPositionSSBO);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(vec4), nullptr, GL_DYNAMIC_DRAW);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
 
         glGenBuffers(1, &curlSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, curlSSBO);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(vec3), nullptr, GL_DYNAMIC_DRAW);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particlePositionSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, positionPredictSSBO);
@@ -133,7 +133,7 @@ namespace simulator {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, blockOffsetSSBO);
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, neighborCountPerParticleSSBO);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, particleIndexInNeighborSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, neighborIndexBufferSSBO);
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, densitySSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, constraintSSBO);
@@ -161,8 +161,7 @@ namespace simulator {
         computeOffsetByBlockOffsetCS = ComputeShader("src/simulator/shader/searchNeighbor/divideCube/computeOffsetByBlockOffset.comp");
         assignParticleToCubeCS = ComputeShader("src/simulator/shader/searchNeighbor/divideCube/assignParticleToCube.comp");
 
-        clearNeighborCountPerParticleCS = ComputeShader("src/simulator/shader/searchNeighbor/searchNeighborFromCube/clearNeighborCountPerParticle.comp");
-        assignNeighborToParticleCS = ComputeShader("src/simulator/shader/searchNeighbor/searchNeighborFromCube/assignNeighborToParticle.comp");
+            searchNeighborFromCubeCS = ComputeShader("src/simulator/shader/searchNeighbor/searchNeighborFromCube.comp");
 
         computeDensityCS = ComputeShader("src/simulator/shader/computeLambda/computeDensity.comp");
         computeConstraintCS = ComputeShader("src/simulator/shader/computeLambda/computeConstraint.comp");
@@ -180,33 +179,116 @@ namespace simulator {
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
+        glFinish();
+
         return 0;
     }
 
     int simulate() {
         applyExternalForce();
 
+        {
+        common::queryTime(QUERY_START_INDEX + 0);
+        }
+
         searchNeighbor();
-        for (unsigned int i = 0; i < ITERATION; i++) {
+
+        {
+        common::queryTime(QUERY_START_INDEX + 1);
+        }
+
+        for (int i = 0; i < constraintProjectionIteration; i++) {
             computeLambda();
             computeDeltaPosition();
             handleBoundaryCollision();
             adjustPositionPredict();
         }
+
+        {
+        common::queryTime(QUERY_START_INDEX + 2);
+        }
+
         updateVelocityByPosition();
 
-        applyVorticityConfinement();
-        applyViscosity();
+        {
+        common::queryTime(QUERY_START_INDEX + 3);
+        }
+
+        if (vorticityParameter > 0.0f)
+            applyVorticityConfinement();
+
+        {
+        common::queryTime(QUERY_START_INDEX + 4);
+        }
+
+        if (viscosityParameter > 0.0f)
+            applyViscosity();
+
+        {
+        common::queryTime(QUERY_START_INDEX + 5);
+        }
 
         handleBoundaryCollision();
 
+        {
+        common::queryTime(QUERY_START_INDEX + 6);
+        }
+
         updateParticlePosition();
+
 
         return 0;
     }
 
     int simulateTerminate() {
-        
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        for (GLuint i = 0; i < 20; i++) {
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, 0);
+        }
+        glMemoryBarrier(GL_ALL_BARRIER_BITS);
+
+        glDeleteBuffers(1, &particlePositionSSBO);
+        glDeleteBuffers(1, &positionPredictSSBO);
+        glDeleteBuffers(1, &velocitySSBO);
+        glDeleteBuffers(1, &particleCountPerCubeSSBO);
+        glDeleteBuffers(1, &cubeOffsetSSBO);
+        glDeleteBuffers(1, &blockOffsetSSBO);
+        glDeleteBuffers(1, &particleIndexInCubeSSBO);
+        glDeleteBuffers(1, &neighborCountPerParticleSSBO);
+        glDeleteBuffers(1, &neighborIndexBufferSSBO);
+        glDeleteBuffers(1, &densitySSBO);
+        glDeleteBuffers(1, &constraintSSBO);
+        glDeleteBuffers(1, &constraintGradSquareSumSSBO);
+        glDeleteBuffers(1, &lambdaSSBO);
+        glDeleteBuffers(1, &deltaPositionSSBO);
+        glDeleteBuffers(1, &curlSSBO);
+        glDeleteBuffers(1, &curlXSSBO);
+        glDeleteBuffers(1, &curlYSSBO);
+        glDeleteBuffers(1, &curlZSSBO);
+
+        glDeleteProgram(applyExternalForcesCS.ID);
+        glDeleteProgram(clearParticleCountPerCubeCS.ID);
+        glDeleteProgram(computeParticleCountPerCubeCS.ID);
+        glDeleteProgram(computeOffsetByParticleCountCS.ID);
+        glDeleteProgram(computeInnerOffsetAndBlockSumCS.ID);
+        glDeleteProgram(computeBlockOffsetCS.ID);
+        glDeleteProgram(computeOffsetByBlockOffsetCS.ID);
+        glDeleteProgram(assignParticleToCubeCS.ID);
+        glDeleteProgram(searchNeighborFromCubeCS.ID);
+        glDeleteProgram(computeDensityCS.ID);
+        glDeleteProgram(computeConstraintCS.ID);
+        glDeleteProgram(computeConstraintGradSquareSumCS.ID);
+        glDeleteProgram(computeLambdaCS.ID);
+        glDeleteProgram(handleBoundaryCollisionCS.ID);
+        glDeleteProgram(computeDeltaPositionCS.ID);
+        glDeleteProgram(adjustPositionPredictCS.ID);
+        glDeleteProgram(updateVelocityByPositionCS.ID);
+        glDeleteProgram(applyViscosityCS.ID);
+        glDeleteProgram(computeCurlCS.ID);
+        glDeleteProgram(applyVorticityConfinementCS.ID);
+
+        glFinish();
+
         return 0;
     }
 
@@ -218,7 +300,7 @@ namespace simulator {
         applyExternalForcesCS.setFloat("MASS_REVERSE", static_cast<float>(MASS_REVERSE));
         applyExternalForcesCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -240,7 +322,7 @@ namespace simulator {
         computeLambdaCS.setFloat("RELAXATION_PARAMETER", static_cast<float>(RELAXATION_PARAMETER));
         computeLambdaCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -251,11 +333,11 @@ namespace simulator {
         computeDeltaPositionCS.setFloat("KERNEL_RADIUS", static_cast<float>(KERNEL_RADIUS));
         computeDeltaPositionCS.setFloat("MASS", static_cast<float>(MASS));
         computeDeltaPositionCS.setFloat("REST_DENSITY_REVERSE", static_cast<float>(REST_DENSITY_REVERSE));
-        computeDeltaPositionCS.setFloat("PI", static_cast<float>(PI));
-        computeDeltaPositionCS.setUint("MAX_NEIGHBOR_COUNT", MAX_NEIGHBOR_COUNT);
+        computeDeltaPositionCS.setFloat("PI", static_cast<float>(common::PI));
+        computeDeltaPositionCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
         computeDeltaPositionCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -263,13 +345,13 @@ namespace simulator {
 
     int handleBoundaryCollision() {
         handleBoundaryCollisionCS.use();
-        handleBoundaryCollisionCS.setFloat("HORIZON_MAX_COORDINATE", static_cast<float>(HORIZON_MAX_COORDINATE));
+        handleBoundaryCollisionCS.setFloat("HORIZON_MAX_COORDINATE", static_cast<float>(horizonMaxCoordinate));
         handleBoundaryCollisionCS.setFloat("RESTITUTION", static_cast<float>(RESTITUTION));
         handleBoundaryCollisionCS.setFloat("FRICTION", static_cast<float>(FRICTION));
         handleBoundaryCollisionCS.setFloat("MAX_HEIGHT", static_cast<float>(MAX_HEIGHT));
         handleBoundaryCollisionCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -279,7 +361,7 @@ namespace simulator {
         adjustPositionPredictCS.use();
         adjustPositionPredictCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -290,7 +372,7 @@ namespace simulator {
         updateVelocityByPositionCS.setFloat("DELTA_TIME_REVERSE", static_cast<float>(DELTA_TIME_REVERSE));
         updateVelocityByPositionCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -298,14 +380,14 @@ namespace simulator {
 
     int applyViscosity() {
         applyViscosityCS.use();
-        applyViscosityCS.setUint("MAX_NEIGHBOR_COUNT", MAX_NEIGHBOR_COUNT);
+        applyViscosityCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
         applyViscosityCS.setFloat("KERNEL_RADIUS", static_cast<float>(KERNEL_RADIUS));
-        applyViscosityCS.setFloat("VISCOSITY_PARAMETER", static_cast<float>(VISCOSITY_PARAMETER));
+        applyViscosityCS.setFloat("VISCOSITY_PARAMETER", static_cast<float>(viscosityParameter));
         applyViscosityCS.setFloat("REST_DENSITY_REVERSE", static_cast<float>(REST_DENSITY_REVERSE));
-        applyViscosityCS.setFloat("PI", static_cast<float>(PI));
+        applyViscosityCS.setFloat("PI", static_cast<float>(common::PI));
         applyViscosityCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -316,14 +398,14 @@ namespace simulator {
 
         applyVorticityConfinementCS.use();
         applyVorticityConfinementCS.setFloat("KERNEL_RADIUS", static_cast<float>(KERNEL_RADIUS));
-        applyVorticityConfinementCS.setUint("MAX_NEIGHBOR_COUNT", MAX_NEIGHBOR_COUNT);
-        applyVorticityConfinementCS.setFloat("PI", static_cast<float>(PI));
-        applyVorticityConfinementCS.setFloat("VORTICITY_PARAMETER", static_cast<float>(VORTICITY_PARAMETER));
+        applyVorticityConfinementCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
+        applyVorticityConfinementCS.setFloat("PI", static_cast<float>(common::PI));
+        applyVorticityConfinementCS.setFloat("VORTICITY_PARAMETER", static_cast<float>(vorticityParameter));
         applyVorticityConfinementCS.setFloat("MASS_REVERSE", static_cast<float>(MASS_REVERSE));
         applyVorticityConfinementCS.setFloat("DELTA_TIME", static_cast<float>(DELTA_TIME));
         applyVorticityConfinementCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -332,7 +414,7 @@ namespace simulator {
     int updateParticlePosition() {
         glBindBuffer(GL_COPY_READ_BUFFER, positionPredictSSBO);
         glBindBuffer(GL_COPY_WRITE_BUFFER, particlePositionSSBO);
-        glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, PARTICLE_COUNT * sizeof(vec4));
+        glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, PARTICLE_COUNT * sizeof(glm::vec4));
         glBindBuffer(GL_COPY_READ_BUFFER, 0);
         glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 
@@ -359,7 +441,7 @@ namespace simulator {
         clearParticleCountPerCubeCS.use();
         clearParticleCountPerCubeCS.setUint("CUBE_COUNT", CUBE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -372,7 +454,7 @@ namespace simulator {
         computeParticleCountPerCubeCS.setFloat("MAX_HEIGHT", static_cast<float>(MAX_HEIGHT));
         computeParticleCountPerCubeCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -393,7 +475,7 @@ namespace simulator {
         computeInnerOffsetAndBlockSumCS.setUint("CUBE_COUNT_SQRT", CUBE_COUNT_SQRT);
         computeInnerOffsetAndBlockSumCS.setUint("CUBE_COUNT", CUBE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT_SQRT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT_SQRT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -414,7 +496,7 @@ namespace simulator {
         computeOffsetByBlockOffsetCS.setUint("CUBE_COUNT_SQRT", CUBE_COUNT_SQRT);
         computeOffsetByBlockOffsetCS.setUint("CUBE_COUNT", CUBE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT_SQRT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT_SQRT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -427,7 +509,7 @@ namespace simulator {
         assignParticleToCubeCS.setFloat("HORIZON_MAX_COORDINATE", static_cast<float>(HORIZON_MAX_COORDINATE));
         assignParticleToCubeCS.setFloat("MAX_HEIGHT", static_cast<float>(MAX_HEIGHT));
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -435,46 +517,29 @@ namespace simulator {
 
 
     int searchNeighborFromCube() {
-        clearNeighborCountPerParticle();
-        assignNeighborToParticle();
+        searchNeighborFromCubeCS.use();
+        searchNeighborFromCubeCS.setFloat("KERNEL_RADIUS", static_cast<float>(KERNEL_RADIUS));
+        searchNeighborFromCubeCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
+        searchNeighborFromCubeCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
+        searchNeighborFromCubeCS.setFloat("HORIZON_MAX_COORDINATE", static_cast<float>(HORIZON_MAX_COORDINATE));
+        searchNeighborFromCubeCS.setFloat("MAX_HEIGHT", static_cast<float>(MAX_HEIGHT));
 
-        return 0;
-    }
-
-    int clearNeighborCountPerParticle() {
-        clearNeighborCountPerParticleCS.use();
-        clearNeighborCountPerParticleCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
-
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
     }
 
-    int assignNeighborToParticle() {
-        assignNeighborToParticleCS.use();
-        assignNeighborToParticleCS.setFloat("KERNEL_RADIUS", static_cast<float>(KERNEL_RADIUS));
-        assignNeighborToParticleCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
-        assignNeighborToParticleCS.setUint("MAX_NEIGHBOR_COUNT", MAX_NEIGHBOR_COUNT);
-        assignNeighborToParticleCS.setFloat("HORIZON_MAX_COORDINATE", static_cast<float>(HORIZON_MAX_COORDINATE));
-        assignNeighborToParticleCS.setFloat("MAX_HEIGHT", static_cast<float>(MAX_HEIGHT));
-
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        return 0;
-    }
-  
 
     int computeDensity() {
         computeDensityCS.use();
         computeDensityCS.setFloat("KERNEL_RADIUS", static_cast<float>(KERNEL_RADIUS));
         computeDensityCS.setFloat("MASS", static_cast<float>(MASS));
-        computeDensityCS.setFloat("PI", static_cast<float>(PI));
-        computeDensityCS.setUint("MAX_NEIGHBOR_COUNT", MAX_NEIGHBOR_COUNT);
+        computeDensityCS.setFloat("PI", static_cast<float>(common::PI));
+        computeDensityCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
         computeDensityCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -485,7 +550,7 @@ namespace simulator {
         computeConstraintCS.setFloat("REST_DENSITY_REVERSE", static_cast<float>(REST_DENSITY_REVERSE));
         computeConstraintCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -496,11 +561,11 @@ namespace simulator {
         computeConstraintGradSquareSumCS.setFloat("KERNEL_RADIUS", static_cast<float>(KERNEL_RADIUS));
         computeConstraintGradSquareSumCS.setFloat("MASS", static_cast<float>(MASS));
         computeConstraintGradSquareSumCS.setFloat("REST_DENSITY_REVERSE", static_cast<float>(REST_DENSITY_REVERSE));
-        computeConstraintGradSquareSumCS.setFloat("PI", static_cast<float>(PI));
-        computeConstraintGradSquareSumCS.setUint("MAX_NEIGHBOR_COUNT", MAX_NEIGHBOR_COUNT);
+        computeConstraintGradSquareSumCS.setFloat("PI", static_cast<float>(common::PI));
+        computeConstraintGradSquareSumCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
         computeConstraintGradSquareSumCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -510,11 +575,11 @@ namespace simulator {
     int computeCurl() {
         computeCurlCS.use();
         computeCurlCS.setFloat("KERNEL_RADIUS", static_cast<float>(KERNEL_RADIUS));
-        computeCurlCS.setUint("MAX_NEIGHBOR_COUNT", MAX_NEIGHBOR_COUNT);
-        computeCurlCS.setFloat("PI", static_cast<float>(PI));
+        computeCurlCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
+        computeCurlCS.setFloat("PI", static_cast<float>(common::PI));
         computeCurlCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / INVOCATION_PER_WORKGROUP)), 1, 1);
+        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -523,55 +588,55 @@ namespace simulator {
     int particlePositionInit() {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, particlePositionSSBO);
 
-        vector<vec4> particlePositionVector(PARTICLE_COUNT);
-        const real DIAMETER = PARTICLE_RADIUS * 2.0;
+        std::vector<glm::vec4> particlePositionVector(PARTICLE_COUNT);
+        const common::real DIAMETER = PARTICLE_RADIUS * 2.0;
 
         // Tow Dam Break
-        unsigned int index = 0;
-        real x = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
-        for (unsigned int i = 0; i < PARTICLE_COUNT_PER_EDGE_XZ; i++) {
-            real y = 20.0 * DIAMETER;
-            for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y / 2; j++) {
-                real z = 0.5 * HORIZON_MAX_COORDINATE - 5.0 * DIAMETER;
-                for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {
-                    particlePositionVector[index++] = vec4(x, y, z, 0.0);
-                    z -= DIAMETER;
-                }
-                y += DIAMETER;
-            }
-            x += DIAMETER;
-        }
-        x = 0.5 * HORIZON_MAX_COORDINATE - 5.0 * DIAMETER;
-        for (unsigned int i = 0; i < PARTICLE_COUNT_PER_EDGE_XZ; i++) {
-            real y = 20.0 * DIAMETER;
-            for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y / 2; j++) {
-                real z = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
-                for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {
-                    particlePositionVector[index++] = vec4(x, y, z, 0.0);
-                    z += DIAMETER;
-                }
-                y += DIAMETER;
-            }
-            x -= DIAMETER;
-        }
-
-        // One Dam Break
         // unsigned int index = 0;
-        // real x = -0.5 * HORIZON_MAX_COORDINATE + 5 * DIAMETER;
+        // common::real x = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
         // for (unsigned int i = 0; i < PARTICLE_COUNT_PER_EDGE_XZ; i++) {
-        //     real y = 50.0 * DIAMETER;
-        //     for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y; j++) {
-        //         real z = -0.5 * HORIZON_MAX_COORDINATE + 5 * DIAMETER;
+        //     common::real y = 20.0 * DIAMETER;
+        //     for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y / 2; j++) {
+        //         common::real z = 0.5 * HORIZON_MAX_COORDINATE - 5.0 * DIAMETER;
         //         for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {
-        //             particlePositionVector[index++] = vec4(x, y, z, 0.0);
-        //             z += DIAMETER;
+        //             particlePositionVector[index++] = glm::vec4(x, y, z, 0.0);
+        //             z -= DIAMETER;
         //         }
         //         y += DIAMETER;
         //     }
         //     x += DIAMETER;
         // }
+        // x = 0.5 * HORIZON_MAX_COORDINATE - 5.0 * DIAMETER;
+        // for (unsigned int i = 0; i < PARTICLE_COUNT_PER_EDGE_XZ; i++) {
+        //     common::real y = 20.0 * DIAMETER;
+        //     for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y / 2; j++) {
+        //         common::real z = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
+        //         for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {
+        //             particlePositionVector[index++] = glm::vec4(x, y, z, 0.0);
+        //             z += DIAMETER;
+        //         }
+        //         y += DIAMETER;
+        //     }
+        //     x -= DIAMETER;
+        // }
 
-        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(vec4), particlePositionVector.data(), GL_DYNAMIC_DRAW);
+        // One Dam Break
+        unsigned int index = 0;
+        common::real x = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
+        for (unsigned int i = 0; i < PARTICLE_COUNT_PER_EDGE_XZ; i++) {
+            common::real y = 50.0 * DIAMETER;
+            for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y; j++) {
+                common::real z = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
+                for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {
+                    particlePositionVector[index++] = glm::vec4(x, y, z, 0.0);
+                    z += DIAMETER;
+                }
+                y += DIAMETER;
+            }
+            x += DIAMETER;
+        }
+
+        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(glm::vec4), particlePositionVector.data(), GL_DYNAMIC_DRAW);
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 

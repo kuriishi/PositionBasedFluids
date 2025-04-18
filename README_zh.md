@@ -1,21 +1,23 @@
-![pbf_32k](pbf_32k_1.gif)
-<p align="center">32k粒子展示1</p>
+![pbf_32k](pbf_1.gif)
+<p align="center">效果展示1</p>
 
-![pbf_32k_blend](pbf_32k_2.gif)
-<p align="center">32k粒子展示2</p>
+![pbf_32k_blend](pbf_2.gif)
+<p align="center">效果展示2</p>
 
 ## 介绍
-基于3D位置的流体模拟，参照Miles Macklin与Matthias Müller的论文 *"Position based fluids."* 实现。
+基于3D位置的实时流体模拟, 参照Miles Macklin与Matthias Müller的论文 *"Position based fluids."* 实现.
 
-渲染使用OpenGL点精灵，模拟计算使用OpenGL Compute Shader。
+基于屏幕空间的实时流体渲染, 参照W. J. van der Laan, S. Green与 M. Sainz的论文 *Screen space fluid rendering with curvature flow* 实现.
 
-## 性能
-CPU: AMD 8845HS
+## 特点
+模拟计算使用OpenGL的Compute Shaders
 
-GPU: AMD 780M 
+流体渲染使用点精灵(屏幕空间四边形)
 
-4次约束投影迭代，在32k粒子的场景下，平均约35FPS
+用户界面使用imgui, 用于检测各部分性能, 以及实时调整参数与交互
 
 ---- 
 
-算法推导见[这里](https://zhuanlan.zhihu.com/p/31850164166)
+流体模拟的算法推导见[这里](https://zhuanlan.zhihu.com/p/31850164166)
+
+流体渲染的算法介绍见[这里](https://zhuanlan.zhihu.com/p/1896667370149352055)

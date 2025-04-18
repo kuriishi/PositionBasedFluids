@@ -1,0 +1,84 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 1) buffer PositionPredict {
+    vec4 positionPredict[];
+};
+
+layout(std430, binding = 3) buffer ParticleCountPerCube {
+    uint particleCountPerCube[];
+};
+
+layout(std430, binding = 4) buffer CubeOffset {
+    uint cubeOffset[];
+};
+
+layout(std430, binding = 5) buffer ParticleIndexInCube {
+    uint particleIndexInCube[];
+};
+
+layout(std430, binding = 7) buffer NeighborCountPerParticle {
+    uint neighborCountPerParticle[];
+};
+
+layout(std430, binding = 8) buffer NeighborIndexBuffer {
+    uint neighborIndexBuffer[];
+};
+
+uniform float KERNEL_RADIUS;
+uniform uint PARTICLE_COUNT;
+uniform uint MAX_NEIGHBOR_COUNT;
+uniform float HORIZON_MAX_COORDINATE;
+uniform float MAX_HEIGHT;
+
+int cubeCountXZ = int(ceil(HORIZON_MAX_COORDINATE / KERNEL_RADIUS));
+int cubeCountY = int(ceil(MAX_HEIGHT / KERNEL_RADIUS));
+ivec3 cubeIndexDot = ivec3(cubeCountXZ * cubeCountY, cubeCountXZ, 1);
+
+ivec3 getIndexInCube(uint index) {
+    vec3 positionInCube = (vec3(positionPredict[index]) + vec3(0.5 * HORIZON_MAX_COORDINATE, 0.0, 0.5 * HORIZON_MAX_COORDINATE)) / KERNEL_RADIUS;
+    ivec3 indexInCube = ivec3(int(floor(positionInCube.x)), int(floor(positionInCube.y)), int(floor(positionInCube.z)));
+    return indexInCube;
+}
+
+void getSurroundingIndexInCube(uint index, out ivec3 surroundingIndexInCube[27]) {
+    ivec3 indexInCube = getIndexInCube(index);
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            for (int k = 0; k < 3; k++) {
+                surroundingIndexInCube[i * 9 + j * 3 + k] = ivec3(i - 1, j - 1, k - 1) + indexInCube;
+            }
+        }
+    }
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= PARTICLE_COUNT) {
+        return;
+    }
+    uint neighborCount = 0;
+    ivec3 surroundingIndexInCube[27];
+    getSurroundingIndexInCube(index, surroundingIndexInCube);
+
+    for (int i = 0; i < 27; i++) {
+        if (all(greaterThanEqual(surroundingIndexInCube[i], ivec3(0, 0, 0))) && all(lessThan(surroundingIndexInCube[i], ivec3(cubeCountXZ, cubeCountXZ, cubeCountXZ)))) {
+            int cubeIndex = int(dot(surroundingIndexInCube[i], cubeIndexDot));
+            for (int j = 0; j < particleCountPerCube[cubeIndex]; j++) {
+                uint neighborIndex = particleIndexInCube[cubeOffset[cubeIndex] - 1 - j];
+                if (index != neighborIndex) {
+                    float distance = length(positionPredict[index].xyz - positionPredict[neighborIndex].xyz);
+                    if (distance <= KERNEL_RADIUS) {
+                        neighborIndexBuffer[index * MAX_NEIGHBOR_COUNT + neighborCount] = neighborIndex;
+                        neighborCount++;
+                    if (neighborCount >= MAX_NEIGHBOR_COUNT) {
+                        break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    neighborCountPerParticle[index] = neighborCount;
+}

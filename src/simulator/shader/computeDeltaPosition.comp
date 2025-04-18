@@ -18,8 +18,8 @@ layout(std430, binding = 7) buffer NeighborCountPerParticle {
     uint neighborCountPerParticle[];
 };
 
-layout(std430, binding = 8) buffer NeighborIndexInParticle {
-    uint neighborIndexInParticle[];
+layout(std430, binding = 8) buffer NeighborIndexBuffer {
+    uint neighborIndexBuffer[];
 };
 
 uniform float KERNEL_RADIUS;
@@ -53,7 +53,7 @@ void main() {
     }
     vec3 dPosition = vec3(0.0);
     for (uint i = 0; i < neighborCountPerParticle[index]; i++) {
-        uint neighborIndex = neighborIndexInParticle[index * MAX_NEIGHBOR_COUNT + i];
+        uint neighborIndex = neighborIndexBuffer[index * MAX_NEIGHBOR_COUNT + i];
         dPosition += (lambda[index] + lambda[neighborIndex]) * SpikyGradient(vec3(positionPredict[index]) - vec3(positionPredict[neighborIndex]), KERNEL_RADIUS);
     }
     dPosition *= MASS * REST_DENSITY_REVERSE;

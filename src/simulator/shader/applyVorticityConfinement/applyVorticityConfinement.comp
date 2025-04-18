@@ -14,10 +14,6 @@ layout(std430, binding = 7) buffer NeighborCountPerParticle {
     uint neighborCountPerParticle[];
 };
 
-layout(std430, binding = 8) buffer NeighborIndexInParticle {
-    uint neighborIndexInParticle[];
-};
-
 layout(std430, binding = 16) buffer Curl {
     vec4 curl[];
 };

@@ -1,21 +1,23 @@
-![pbf_32k](pbf_32k_1.gif)
-<p align="center">32k Particles Showcase 1</p>
+![pbf_32k](pbf_1.gif)
+<p align="center">showcase 1</p>
 
-![pbf_32k_blend](pbf_32k_2.gif)
-<p align="center">32k Particles Showcase 2</p>
+![pbf_32k_blend](pbf_2.gif)
+<p align="center">showcase 2</p>
 
 ## Introduction
-A position based fluids implementation, reference to the paper "Position based fluids." by Miles Macklin and Matthias Müller.
+Real-time fluid simulation based on 3D position, implemented with reference to the paper "Position based fluids" by Miles Macklin and Matthias Müller.
 
-Rendering utilizes OpenGL point sprites, while simulation computations are performed using OpenGL Compute Shaders.
+Real-time screen-space fluid rendering, implemented with reference to the paper "Screen space fluid rendering with curvature flow" by W. J. van der Laan, S. Green, and M. Sainz.
 
-## Performance
-CPU: AMD 8845HS
+## Features
+Simulation powered by OpenGL Compute Shaders
 
-GPU: AMD 780M 
+Fluid rendering using point sprites (screen oriented quads)
 
-With 4 constraint projection iterations, the simulation achieves an average of ~35 FPS in scenarios containing 32k particles.
+ImGui-based user interface for performance monitoring, parameter tuning, and real-time interaction
 
 ---- 
 
-Algorithm derivation details can be found [here](https://zhuanlan.zhihu.com/p/31850164166).
+Fluid simulation algorithm derivation can be found [here](https://zhuanlan.zhihu.com/p/31850164166)
+
+Fluid rendering algorithm introduction can be found [here](https://zhuanlan.zhihu.com/p/1896667370149352055)
