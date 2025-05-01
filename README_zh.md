@@ -1,7 +1,7 @@
-![pbf_32k](pbf_1.gif)
+![pbf_32k](pbf_1_r.gif)
 <p align="center">效果展示1</p>
 
-![pbf_32k_blend](pbf_2.gif)
+![pbf_32k_blend](pbf_2_r.gif)
 <p align="center">效果展示2</p>
 
 ## 介绍
