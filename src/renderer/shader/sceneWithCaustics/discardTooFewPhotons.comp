@@ -1,0 +1,27 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+// uniforms
+// textures
+layout(binding = 0, rgba32f) uniform image2D uCausticsTexture;
+// other parameters
+uniform ivec2 uCausticsTextureSize;
+uniform float uPhotonEnergy;
+uniform int uMinPhotons;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    ivec2 texelCoords = ivec2(index % uCausticsTextureSize.x, index / uCausticsTextureSize.x);
+    if (texelCoords.x >= uCausticsTextureSize.x || texelCoords.y >= uCausticsTextureSize.y) {
+        return;
+    }
+
+    vec4 caustics = imageLoad(uCausticsTexture, texelCoords);
+    int count = int(caustics.a / uPhotonEnergy);
+
+    if (count < uMinPhotons) {
+        imageStore(uCausticsTexture, texelCoords, vec4(0.0));
+    }
+    
+}

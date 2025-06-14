@@ -14,6 +14,14 @@ namespace simulator {
     int maxNeighborCount = 160;
     common::real horizonMaxCoordinate = HORIZON_MAX_COORDINATE;
 
+    int uLeft = 0;
+    int uRight = 0;
+    int uUp = 0;
+    int uDown = 0;
+    int uFront = 0;
+    int uBack = 0;
+    float uDeltaVelocity = 5.0f;
+
     // performance log
     const unsigned int QUERY_START_INDEX = 1;
 
@@ -71,6 +79,8 @@ namespace simulator {
     ComputeShader computeCurlCS;
     ComputeShader applyVorticityConfinementCS;
 
+    ComputeShader manipulateVelocityCS;
+
     int simulateInit() {
         glGenBuffers(1, &particlePositionSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, particlePositionSSBO);
@@ -89,11 +99,11 @@ namespace simulator {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, cubeOffsetSSBO);
         glBufferData(GL_SHADER_STORAGE_BUFFER, CUBE_COUNT * sizeof(GLuint), nullptr, GL_DYNAMIC_DRAW);
         glGenBuffers(1, &particleIndexInCubeSSBO);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleIndexInCubeSSBO);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(GLuint), nullptr, GL_DYNAMIC_DRAW);
         glGenBuffers(1, &blockOffsetSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, blockOffsetSSBO);
         glBufferData(GL_SHADER_STORAGE_BUFFER, CUBE_COUNT_SQRT * sizeof(GLuint), nullptr, GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleIndexInCubeSSBO);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(GLuint), nullptr, GL_DYNAMIC_DRAW);
 
         glGenBuffers(1, &neighborCountPerParticleSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, neighborCountPerParticleSSBO);
@@ -177,6 +187,8 @@ namespace simulator {
         computeCurlCS = ComputeShader("src/simulator/shader/applyVorticityConfinement/computeCurl.comp");
         applyVorticityConfinementCS = ComputeShader("src/simulator/shader/applyVorticityConfinement/applyVorticityConfinement.comp");
 
+        manipulateVelocityCS = ComputeShader("src/simulator/shader/manipulateVelocity.comp");
+
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
         glFinish();
@@ -223,6 +235,8 @@ namespace simulator {
 
         if (viscosityParameter > 0.0f)
             applyViscosity();
+
+        manipulateVelocity();
 
         {
         common::queryTime(QUERY_START_INDEX + 5);
@@ -300,7 +314,8 @@ namespace simulator {
         applyExternalForcesCS.setFloat("MASS_REVERSE", static_cast<float>(MASS_REVERSE));
         applyExternalForcesCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        applyExternalForcesCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -322,7 +337,8 @@ namespace simulator {
         computeLambdaCS.setFloat("RELAXATION_PARAMETER", static_cast<float>(RELAXATION_PARAMETER));
         computeLambdaCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        computeLambdaCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -337,7 +353,8 @@ namespace simulator {
         computeDeltaPositionCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
         computeDeltaPositionCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        computeDeltaPositionCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -351,7 +368,8 @@ namespace simulator {
         handleBoundaryCollisionCS.setFloat("MAX_HEIGHT", static_cast<float>(MAX_HEIGHT));
         handleBoundaryCollisionCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        handleBoundaryCollisionCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -361,7 +379,8 @@ namespace simulator {
         adjustPositionPredictCS.use();
         adjustPositionPredictCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        adjustPositionPredictCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -372,7 +391,8 @@ namespace simulator {
         updateVelocityByPositionCS.setFloat("DELTA_TIME_REVERSE", static_cast<float>(DELTA_TIME_REVERSE));
         updateVelocityByPositionCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        updateVelocityByPositionCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -387,7 +407,8 @@ namespace simulator {
         applyViscosityCS.setFloat("PI", static_cast<float>(common::PI));
         applyViscosityCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        applyViscosityCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -405,7 +426,8 @@ namespace simulator {
         applyVorticityConfinementCS.setFloat("DELTA_TIME", static_cast<float>(DELTA_TIME));
         applyVorticityConfinementCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        applyVorticityConfinementCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -441,7 +463,8 @@ namespace simulator {
         clearParticleCountPerCubeCS.use();
         clearParticleCountPerCubeCS.setUint("CUBE_COUNT", CUBE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        clearParticleCountPerCubeCS.dispatchCompute(CUBE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -454,7 +477,8 @@ namespace simulator {
         computeParticleCountPerCubeCS.setFloat("MAX_HEIGHT", static_cast<float>(MAX_HEIGHT));
         computeParticleCountPerCubeCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        computeParticleCountPerCubeCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -464,7 +488,8 @@ namespace simulator {
         computeOffsetByParticleCountCS.use();
         computeOffsetByParticleCountCS.setUint("CUBE_COUNT", CUBE_COUNT);
 
-        glDispatchCompute(1, 1, 1);
+        // glDispatchCompute(1, 1, 1);
+        computeOffsetByParticleCountCS.dispatchCompute(1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -475,7 +500,8 @@ namespace simulator {
         computeInnerOffsetAndBlockSumCS.setUint("CUBE_COUNT_SQRT", CUBE_COUNT_SQRT);
         computeInnerOffsetAndBlockSumCS.setUint("CUBE_COUNT", CUBE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT_SQRT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT_SQRT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        computeInnerOffsetAndBlockSumCS.dispatchCompute(CUBE_COUNT_SQRT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -485,7 +511,8 @@ namespace simulator {
         computeBlockOffsetCS.use();
         computeBlockOffsetCS.setUint("CUBE_COUNT_SQRT", CUBE_COUNT_SQRT);
 
-        glDispatchCompute(1, 1, 1);
+        // glDispatchCompute(1, 1, 1);
+        computeBlockOffsetCS.dispatchCompute(1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -496,7 +523,8 @@ namespace simulator {
         computeOffsetByBlockOffsetCS.setUint("CUBE_COUNT_SQRT", CUBE_COUNT_SQRT);
         computeOffsetByBlockOffsetCS.setUint("CUBE_COUNT", CUBE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT_SQRT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(CUBE_COUNT_SQRT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        computeOffsetByBlockOffsetCS.dispatchCompute(CUBE_COUNT_SQRT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -509,7 +537,8 @@ namespace simulator {
         assignParticleToCubeCS.setFloat("HORIZON_MAX_COORDINATE", static_cast<float>(HORIZON_MAX_COORDINATE));
         assignParticleToCubeCS.setFloat("MAX_HEIGHT", static_cast<float>(MAX_HEIGHT));
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        assignParticleToCubeCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -524,7 +553,8 @@ namespace simulator {
         searchNeighborFromCubeCS.setFloat("HORIZON_MAX_COORDINATE", static_cast<float>(HORIZON_MAX_COORDINATE));
         searchNeighborFromCubeCS.setFloat("MAX_HEIGHT", static_cast<float>(MAX_HEIGHT));
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        searchNeighborFromCubeCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -539,7 +569,8 @@ namespace simulator {
         computeDensityCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
         computeDensityCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        computeDensityCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -550,7 +581,8 @@ namespace simulator {
         computeConstraintCS.setFloat("REST_DENSITY_REVERSE", static_cast<float>(REST_DENSITY_REVERSE));
         computeConstraintCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        computeConstraintCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -565,7 +597,8 @@ namespace simulator {
         computeConstraintGradSquareSumCS.setUint("MAX_NEIGHBOR_COUNT", maxNeighborCount);
         computeConstraintGradSquareSumCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        computeConstraintGradSquareSumCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -579,7 +612,8 @@ namespace simulator {
         computeCurlCS.setFloat("PI", static_cast<float>(common::PI));
         computeCurlCS.setUint("PARTICLE_COUNT", PARTICLE_COUNT);
 
-        glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        // glDispatchCompute(GLuint(ceil(static_cast<double>(PARTICLE_COUNT) / common::INVOCATION_PER_WORKGROUP)), 1, 1);
+        computeCurlCS.dispatchCompute(PARTICLE_COUNT);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
@@ -639,6 +673,24 @@ namespace simulator {
         glBufferData(GL_SHADER_STORAGE_BUFFER, PARTICLE_COUNT * sizeof(glm::vec4), particlePositionVector.data(), GL_DYNAMIC_DRAW);
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+        return 0;
+    }
+
+    int manipulateVelocity() {
+        manipulateVelocityCS.use();
+        manipulateVelocityCS.setUint("uParticleCount", PARTICLE_COUNT);
+        manipulateVelocityCS.setFloat("uDeltaVelocity", uDeltaVelocity);
+        
+        manipulateVelocityCS.setInt("uLeft", uLeft);
+        manipulateVelocityCS.setInt("uRight", uRight);
+        manipulateVelocityCS.setInt("uUp", uUp);
+        manipulateVelocityCS.setInt("uDown", uDown);
+        manipulateVelocityCS.setInt("uFront", uFront);
+        manipulateVelocityCS.setInt("uBack", uBack);
+        
+        manipulateVelocityCS.dispatchCompute(PARTICLE_COUNT);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         return 0;
     }

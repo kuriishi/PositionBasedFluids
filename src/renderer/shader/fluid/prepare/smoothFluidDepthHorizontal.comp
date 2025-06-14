@@ -9,9 +9,9 @@ layout(binding = 2, r8i) uniform readonly iimage2D fragSampledFlagTexture;
 uniform int SCR_WIDTH;
 uniform int SCR_HEIGHT;
 
-const int KERNEL_SIZE = 8;
+const int KERNEL_SIZE = 3;
 
-const float GAUSSIAN_WEIGHTS[KERNEL_SIZE] = float[] (0.197448, 0.174697, 0.120999, 0.065602, 0.02784, 0.009246, 0.002403, 0.000489);
+// const float GAUSSIAN_WEIGHTS[KERNEL_SIZE] = float[] (0.197448, 0.174697, 0.120999, 0.065602, 0.02784, 0.009246, 0.002403, 0.000489);
 
 const float BILATERAL_PARA_sigma_d = 1.0;
 const float BILATERAL_PARA_sigma_r = 1.0;
@@ -21,6 +21,11 @@ void main() {
     ivec2 texelCoord = ivec2(index % SCR_WIDTH, index / SCR_WIDTH);
     // ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
     if (texelCoord.x >= SCR_WIDTH || texelCoord.y >= SCR_HEIGHT) {
+        return;
+    }
+
+    int valid = imageLoad(fragSampledFlagTexture, texelCoord).r;
+    if (valid == 0) {
         return;
     }
 

@@ -6,65 +6,44 @@
 
 #include <vector>
 #include <string>
+#include <memory>
 
 #include "../common/common.hpp"
+#include "scene.hpp"
+#include "sceneWithCaustics.hpp"
+#include "fluid.hpp"
+#include "caustics.hpp"
+#include "camera.hpp"
 
 namespace renderer {
-    enum DisplayMode {
-        FLUID,
-        NORMAL,
-        THICKNESS,
-        DEPTH,
-        PARTICLE
+    extern bool enableCaustics;
+
+    enum RenderMode {
+        FLUID_AND_SCENE,
+        PHOTON_TERMINATE_POSITION,
     };
-    // gui parameters
-    extern DisplayMode displayMode;
-    extern bool enableSmoothDepth;
-    extern int smoothIteration;
-    extern float particleRadiusScaler;
-    extern float minimumDensityScaler;
-    extern float thicknessScaler;
-    extern float fluidColor[3];
+    extern RenderMode renderMode;
 
-    // renderer
-    int renderInit();
-    int render();
-    int renderTerminate();
+    class Renderer {
+        public:
+            Renderer();
+            ~Renderer();
 
-    // Fluid
-    int renderInitFluid();
-    int clearFlag();
-    int renderFluidDepthTexture();
-    int renderFluidThicknessTexture();
-    int smoothFluidDepthTexture();
-    int computeFluidNormalTexture();
-    int renderFluidPrepare();
+            int render();
+        private:
+            Camera& camera;
+            unsigned int width;
+            unsigned int height;
 
-    int renderFluid();
-    int renderFluidDepth();
-    int renderFluidThickness();
-    int renderFluidNormal();
-    int renderParticle();
+            std::shared_ptr<caustics::Caustics> m_caustics;
+            std::shared_ptr<sceneWithCaustics::SceneWithCaustics> m_sceneWithCaustics;
+            std::shared_ptr<scene::Scene> m_scene;
+            std::shared_ptr<fluid::Fluid> m_fluid;
 
-    int renderTerminateFluid();
+            int init();
 
-    // Background
-    int renderInitSkybox();
-    int renderSkybox();
-    int renderTerminateSkybox();
+            int renderCausticsTerminatePosition();
+            int renderFluidAndScene();
+    };
 
-    int renderInitFloor();
-    int renderFloor();
-    int renderTerminateFloor();
-
-    int renderInitBackground();
-    int renderBackground();
-    int drawBackground();
-    int renderTerminateBackground();
-
-    // utils
-    int copyParticleAttribute();
-
-    unsigned int loadTexture(const char* path);
-    unsigned int loadCubemap(std::vector<std::string> faces);
 }

@@ -1,0 +1,18 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(binding = 0, r8i) uniform iimage2D fragSampledFlagTexture;
+
+uniform int SCR_WIDTH;
+uniform int SCR_HEIGHT;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    ivec2 texelCoord = ivec2(index % SCR_WIDTH, index / SCR_HEIGHT);
+    if (texelCoord.x >= SCR_WIDTH || texelCoord.y >= SCR_HEIGHT) {
+        return;
+    }
+
+    imageStore(fragSampledFlagTexture, texelCoord, ivec4(0));
+}

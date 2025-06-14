@@ -1,0 +1,18 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(binding = 0, r8i) uniform iimage2D uValidTexture;
+
+// (width, height)
+uniform ivec2 uScreenSize;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    ivec2 texCoords = ivec2(index % uScreenSize.x, index / uScreenSize.x);
+    if (texCoords.x >= uScreenSize.x || texCoords.y >= uScreenSize.y) {
+        return;
+    }
+
+    imageStore(uValidTexture, texCoords, ivec4(0));
+}

@@ -7,6 +7,8 @@
 #include "../renderer/window.hpp"
 #include "../common/performance_log.hpp"
 #include "../renderer/renderer.hpp"
+#include "../renderer/fluid.hpp"
+#include "../renderer/scene.hpp"
 #include "../simulator/simulator.hpp"
 
 namespace gui {
@@ -18,7 +20,7 @@ namespace gui {
 
         ImGui::StyleColorsDark();
 
-        ImGui_ImplGlfw_InitForOpenGL(renderer::window, true);
+        ImGui_ImplGlfw_InitForOpenGL(renderer::window::window, true);
         ImGui_ImplOpenGL3_Init(GLSL_VERSION);
 
         glFinish();
@@ -39,7 +41,7 @@ namespace gui {
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         int display_w, display_h;
-        glfwGetFramebufferSize(renderer::window, &display_w, &display_h);
+        glfwGetFramebufferSize(renderer::window::window, &display_w, &display_h);
 
         return 0;
     }
@@ -73,58 +75,83 @@ namespace gui {
 
             // render
             {
-                if (ImGui::RadioButton("Fluid", renderer::displayMode == renderer::DisplayMode::FLUID)) 
-                    renderer::displayMode = renderer::DisplayMode::FLUID;
-                if (ImGui::RadioButton("Thickness", renderer::displayMode == renderer::DisplayMode::THICKNESS)) 
-                    renderer::displayMode = renderer::DisplayMode::THICKNESS;
-                if (ImGui::RadioButton("Normal", renderer::displayMode == renderer::DisplayMode::NORMAL)) 
-                    renderer::displayMode = renderer::DisplayMode::NORMAL;
-                if (ImGui::RadioButton("Depth", renderer::displayMode == renderer::DisplayMode::DEPTH)) 
-                    renderer::displayMode = renderer::DisplayMode::DEPTH;
-                if (ImGui::RadioButton("Particle", renderer::displayMode == renderer::DisplayMode::PARTICLE)) 
-                    renderer::displayMode = renderer::DisplayMode::PARTICLE;
-                ImGui::Checkbox("Smooth Depth", &renderer::enableSmoothDepth);
-                ImGui::SliderInt("Smooth Iteration", &renderer::smoothIteration, 1, 32);
-                static float particleRadiusScaler = renderer::particleRadiusScaler * 0.1f;
+                if (ImGui::RadioButton("Fluid and Scene", renderer::renderMode == renderer::RenderMode::FLUID_AND_SCENE)) 
+                    renderer::renderMode = renderer::RenderMode::FLUID_AND_SCENE;
+                if (ImGui::RadioButton("Photon Terminate Position", renderer::renderMode == renderer::RenderMode::PHOTON_TERMINATE_POSITION)) 
+                    renderer::renderMode = renderer::RenderMode::PHOTON_TERMINATE_POSITION;
+
+                ImGui::Separator();
+
+                ImGui::Checkbox("Smooth Depth", &renderer::fluid::enableSmoothDepth);
+                ImGui::SliderInt("Smooth Iteration", &renderer::fluid::smoothIteration, 1, 256);
+                static float particleRadiusScaler = renderer::fluid::particleRadiusScaler * 0.1f;
                 ImGui::SliderFloat("Particle Radius Scaler", &particleRadiusScaler, 0.0f, 1.0f);
-                renderer::particleRadiusScaler = particleRadiusScaler * 10.0f;
-                static float minimumDensityScaler = renderer::minimumDensityScaler * 0.5f;
+                renderer::fluid::particleRadiusScaler = particleRadiusScaler * 10.0f;
+                static float minimumDensityScaler = renderer::fluid::minimumDensityScaler * 0.5f;
                 ImGui::SliderFloat("Minimum Density Scaler", &minimumDensityScaler, 0.0f, 1.0f);
-                renderer::minimumDensityScaler = minimumDensityScaler * 2.0f;
-                static float thicknessScaler = renderer::thicknessScaler;
-                ImGui::SliderFloat("Thickness Scaler", &thicknessScaler, 0.0f, 1.0f);
-                renderer::thicknessScaler = thicknessScaler;
-                ImGui::ColorEdit3("Fluid Color", renderer::fluidColor);
+                renderer::fluid::minimumDensityScaler = minimumDensityScaler * 2.0f;
+
+                ImGui::Separator();
+
+                if (renderer::renderMode == renderer::RenderMode::FLUID_AND_SCENE) {
+                    if (ImGui::RadioButton("Fluid", renderer::fluid::displayMode == renderer::fluid::DisplayMode::FLUID)) 
+                        renderer::fluid::displayMode = renderer::fluid::DisplayMode::FLUID;
+                    if (ImGui::RadioButton("Thickness", renderer::fluid::displayMode == renderer::fluid::DisplayMode::THICKNESS)) 
+                        renderer::fluid::displayMode = renderer::fluid::DisplayMode::THICKNESS;
+                    if (ImGui::RadioButton("Normal", renderer::fluid::displayMode == renderer::fluid::DisplayMode::NORMAL)) 
+                        renderer::fluid::displayMode = renderer::fluid::DisplayMode::NORMAL;
+                    if (ImGui::RadioButton("Depth", renderer::fluid::displayMode == renderer::fluid::DisplayMode::DEPTH)) 
+                        renderer::fluid::displayMode = renderer::fluid::DisplayMode::DEPTH;
+                    if (ImGui::RadioButton("Particle", renderer::fluid::displayMode == renderer::fluid::DisplayMode::PARTICLE)) 
+                        renderer::fluid::displayMode = renderer::fluid::DisplayMode::PARTICLE;
+                    static float thicknessScaler = renderer::fluid::thicknessScaler;
+                    ImGui::SliderFloat("Thickness Scaler", &thicknessScaler, 0.0f, 1.0f);
+                    renderer::fluid::thicknessScaler = thicknessScaler;
+                    ImGui::ColorEdit3("Fluid Color", renderer::fluid::fluidColor);
+                    static float photonEnergy = renderer::sceneWithCaustics::uPhotonEnergy * 40.0f;
+
+                    ImGui::Checkbox("Enable Caustics", &renderer::enableCaustics);
+                    if (renderer::enableCaustics) {
+                        ImGui::SliderFloat("Photon Energy", &photonEnergy, 0.0f, 1.0f);
+                        renderer::sceneWithCaustics::uPhotonEnergy = photonEnergy * 0.025f;
+                        static float photonSize = renderer::sceneWithCaustics::uPhotonSize * 2.0f;
+                        ImGui::SliderFloat("Photon Size", &photonSize, 0.0f, 1.0f);
+                        renderer::sceneWithCaustics::uPhotonSize = photonSize * 0.5f;
+                        ImGui::SliderInt("Blur Count", &renderer::sceneWithCaustics::blurCount, 0, 10);
+                    }
+                }
             }
 
             // simulation
             {
-                ImGui::Separator();
-                ImGui::Checkbox("Simulation", &common::enableSimulation);
-                ImGui::SliderInt("Constraint Projection Iteration", &simulator::constraintProjectionIteration, 1, 32);
-                static float viscosity = simulator::viscosityParameter * 1e2f;
-                ImGui::SliderFloat("Viscosity", &viscosity, 0.0f, 1.0f);
-                simulator::viscosityParameter = viscosity * 1e-2f;
-                static float vorticity = simulator::vorticityParameter * 1e6f;
-                ImGui::SliderFloat("Vorticity", &vorticity, 0.0f, 1.0f);
-                simulator::vorticityParameter = vorticity * 1e-6f;
-                static float horizonMaxCoordinate = static_cast<float>(simulator::horizonMaxCoordinate / simulator::HORIZON_MAX_COORDINATE);
-                ImGui::SliderFloat("Horizon Max Coordinate", &horizonMaxCoordinate, 0.5f, 1.0f);
-                simulator::horizonMaxCoordinate = horizonMaxCoordinate * simulator::HORIZON_MAX_COORDINATE;
-                // ImGui::SliderInt("*Max Neighbor Count", &simulator::maxNeighborCount, 64, 256);
+                {
+                    ImGui::Separator();
+                    ImGui::Checkbox("Simulation", &common::enableSimulation);
+                    ImGui::SliderInt("Constraint Projection Iteration", &simulator::constraintProjectionIteration, 1, 32);
+                    static float viscosity = simulator::viscosityParameter * 1e2f;
+                    ImGui::SliderFloat("Viscosity", &viscosity, 0.0f, 1.0f);
+                    simulator::viscosityParameter = viscosity * 1e-2f;
+                    static float vorticity = simulator::vorticityParameter * 1e6f;
+                    ImGui::SliderFloat("Vorticity", &vorticity, 0.0f, 1.0f);
+                    simulator::vorticityParameter = vorticity * 1e-6f;
+                    static float horizonMaxCoordinate = static_cast<float>(simulator::horizonMaxCoordinate / simulator::HORIZON_MAX_COORDINATE);
+                    ImGui::SliderFloat("Horizon Max Coordinate", &horizonMaxCoordinate, 0.5f, 1.0f);
+                    simulator::horizonMaxCoordinate = horizonMaxCoordinate * simulator::HORIZON_MAX_COORDINATE;
+                    // ImGui::SliderInt("*Max Neighbor Count", &simulator::maxNeighborCount, 64, 256);
+                }
             }
 
             // utils
             {
                 ImGui::Separator();
-                ImGui::Checkbox("Camera Movement", &common::enableCameraMovement);
+                ImGui::Checkbox("Camera Mode", &common::cameraMode);
                 ImGui::Text("[Esc] to exit camera model");
 
                 ImGui::Separator();
                 if (ImGui::Button("Reset")) 
                     common::resetSimulation = true;
                 if (ImGui::Button("Exit"))
-                    glfwSetWindowShouldClose(renderer::window, true);
+                    glfwSetWindowShouldClose(renderer::window::window, true);
                 ImGui::End();
             }
         }

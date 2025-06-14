@@ -1,0 +1,72 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+// uniforms
+// textures
+layout(binding = 1, rgba32f) uniform readonly image2D uInputTexture;
+layout(binding = 2, rgba32f) uniform writeonly image2D uOutputTexture;
+// other parameters
+uniform ivec2 uTextureSize;
+uniform bool uHorizontal; 
+
+// constants
+const int kernelRadius = 3; 
+const float weights[7] = float[](
+    0.2142857143,
+    0.1964285714, 0.1964285714,
+    0.1214285714, 0.1214285714,
+    0.0442857143, 0.0442857143
+);
+
+// const int kernelRadius = 5; 
+// const float weights[11] = float[](
+//     0.2270270270,
+//     0.1945945946, 0.1945945946,
+//     0.1216216216, 0.1216216216,
+//     0.0540540541, 0.0540540541,
+//     0.0162162162, 0.0162162162,
+//     0.0027027027, 0.0027027027
+// );
+
+// const int kernelRadius = 10; 
+// const float weights[21] = float[](
+//     0.1222794897, 
+//     0.1187092919, 0.1187092919,
+//     0.1090219879, 0.1090219879,
+//     0.0942358891, 0.0942358891,
+//     0.0765651433, 0.0765651433,
+//     0.0585557783, 0.0585557783,
+//     0.0421186776, 0.0421186776,
+//     0.0285346734, 0.0285346734,
+//     0.0181931122, 0.0181931122,
+//     0.0108395366, 0.0108395366,
+//     0.0060774479, 0.0060774479
+// );
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    ivec2 texelCoords = ivec2(index % uTextureSize.x, index / uTextureSize.x);
+    if (texelCoords.x >= uTextureSize.x || texelCoords.y >= uTextureSize.y) {
+        return;
+    }
+    
+    // Gaussian Blur
+    vec4 result = imageLoad(uInputTexture, texelCoords) * weights[0];
+    if(uHorizontal) {
+        for(int i = 1; i <= kernelRadius; i++) {
+            ivec2 offset1 = ivec2(clamp(texelCoords.x + i, 0, uTextureSize.x - 1), texelCoords.y);
+            ivec2 offset2 = ivec2(clamp(texelCoords.x - i, 0, uTextureSize.x - 1), texelCoords.y);
+            result += imageLoad(uInputTexture, offset1) * weights[i];
+            result += imageLoad(uInputTexture, offset2) * weights[i];
+        }
+    } else {
+        for(int i = 1; i <= kernelRadius; i++) {
+            ivec2 offset1 = ivec2(texelCoords.x, clamp(texelCoords.y + i, 0, uTextureSize.y - 1));
+            ivec2 offset2 = ivec2(texelCoords.x, clamp(texelCoords.y - i, 0, uTextureSize.y - 1));
+            result += imageLoad(uInputTexture, offset1) * weights[i];
+            result += imageLoad(uInputTexture, offset2) * weights[i];
+        }
+    }
+    imageStore(uOutputTexture, texelCoords, result);
+}

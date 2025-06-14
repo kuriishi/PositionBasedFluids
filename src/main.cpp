@@ -8,13 +8,12 @@
 #include <iomanip>
 
 int main() {
-    renderer::windowInit();
-    renderer::renderInit();
+    renderer::Renderer renderer;
     simulator::simulateInit();
     common::performanceLogInit();
     gui::guiInit();
 
-    while(!glfwWindowShouldClose(renderer::window)) {
+    while(!glfwWindowShouldClose(renderer::window::window)) {
         if (common::resetSimulation) {
             common::resetSimulation = false;
             simulator::simulateTerminate();
@@ -34,25 +33,25 @@ int main() {
         }
 
         glfwPollEvents();
-        renderer::computeDeltaTime();
-        renderer::processInput(renderer::window);
-        if (common::enableCameraMovement) {
-            renderer::enableMouseMovement();
-            glfwSetInputMode(renderer::window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-            renderer::processCameraInput(renderer::window);
+        renderer::window::computeDeltaTime();
+        renderer::window::processInput(renderer::window::window);
+        if (common::cameraMode) {
+            renderer::window::enableMouseMovement();
+            glfwSetInputMode(renderer::window::window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            renderer::window::processCameraInput(renderer::window::window);
         }
         else {
-            renderer::disableMouseMovement();
-            glfwSetInputMode(renderer::window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            renderer::window::disableMouseMovement();
+            glfwSetInputMode(renderer::window::window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         }
 
         {
         common::queryTime(common::SIMULATE_TIME_QUERY_COUNT + 1);
         }
 
-        renderer::render();
+        renderer.render();
         gui::guiRender(); 
-        glfwSwapBuffers(renderer::window);
+        glfwSwapBuffers(renderer::window::window);
 
         {
         common::queryTime(common::TIME_QUERY_COUNT - 1);
@@ -66,8 +65,7 @@ int main() {
     gui::guiTerminate();
     common::performanceLogTerminate();
     simulator::simulateTerminate();
-    renderer::renderTerminate();
-    renderer::windowTerminate();
+    renderer::window::windowTerminate();
 
     return 0;
 }

@@ -81,6 +81,11 @@ public:
         return glm::lookAt(Position, Position + Front, Up);
     }
 
+    glm::mat4 GetProjectionMatrix(unsigned int width, unsigned int height, float near = 0.1f, float far = 100.0f)
+    {
+        return glm::perspective(glm::radians(Zoom), (float)width / (float)height, near, far);
+    }
+
     // processes input received from any keyboard-like input system. Accepts input parameter in the form of camera defined ENUM (to abstract it from windowing systems)
     void ProcessKeyboard(Camera_Movement direction, float deltaTime)
     {

@@ -13,6 +13,8 @@
 #include <sstream>
 #include <iostream>
 
+#include "common.hpp"
+
 class ComputeShader
 {
 public:
@@ -67,6 +69,14 @@ public:
     { 
         glUseProgram(ID); 
     }
+    // ------------------------------------------------------------------------
+    void dispatchCompute(unsigned int x, unsigned int y = 1, unsigned int z = 1, unsigned int invocationPerWorkgroup = common::INVOCATION_PER_WORKGROUP)
+    {
+        glDispatchCompute(ceilWithInvocationPerWorkgroup(x, invocationPerWorkgroup), 
+                          ceilWithInvocationPerWorkgroup(y, invocationPerWorkgroup), 
+                          ceilWithInvocationPerWorkgroup(z, invocationPerWorkgroup));
+    }
+    // ------------------------------------------------------------------------
     // utility uniform functions
     // ------------------------------------------------------------------------
     void setBool(const std::string &name, bool value) const
@@ -87,6 +97,16 @@ public:
     void setFloat(const std::string &name, float value) const
     { 
         glUniform1f(glGetUniformLocation(ID, name.c_str()), value); 
+    }
+    // ------------------------------------------------------------------------
+    void setVec2(const std::string &name, glm::vec2 value) const
+    {
+        glUniform2fv(glGetUniformLocation(ID, name.c_str()), 1, glm::value_ptr(value));
+    }
+    // ------------------------------------------------------------------------
+    void setIvec2(const std::string &name, glm::ivec2 value) const
+    {
+        glUniform2iv(glGetUniformLocation(ID, name.c_str()), 1, glm::value_ptr(value));
     }
     // ------------------------------------------------------------------------
     void setVec3(const std::string &name, glm::vec3 value) const
@@ -135,5 +155,10 @@ private:
                           << infoLog << "\n----------------------------------\n";
             }
         }
+    }
+
+    unsigned int ceilWithInvocationPerWorkgroup(unsigned int x, unsigned int invocationPerWorkgroup)
+    {
+        return static_cast<unsigned int>(ceil(static_cast<double>(x) / static_cast<double>(invocationPerWorkgroup)));
     }
 };

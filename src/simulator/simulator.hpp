@@ -1,7 +1,5 @@
 #pragma once
 
-#define eGPU
-
 #include <glm/glm.hpp>
 #include <glad/glad.h>
 
@@ -15,6 +13,14 @@ namespace simulator {
     extern int maxNeighborCount;
     extern common::real horizonMaxCoordinate;
 
+    extern int uLeft;
+    extern int uRight;
+    extern int uUp;
+    extern int uDown;
+    extern int uFront;
+    extern int uBack;
+    extern float uDeltaVelocity;
+
     extern GLuint particlePositionSSBO;
     extern GLuint densitySSBO;
 
@@ -23,15 +29,15 @@ namespace simulator {
     #else
     const unsigned int PARTICLE_COUNT_PER_EDGE_XZ = 16;
     #endif
-    const unsigned int PARTICLE_COUNT_PER_EDGE_Y = 128;
+    const unsigned int PARTICLE_COUNT_PER_EDGE_Y = 100;
     const unsigned int PARTICLE_COUNT = PARTICLE_COUNT_PER_EDGE_XZ * PARTICLE_COUNT_PER_EDGE_XZ * PARTICLE_COUNT_PER_EDGE_Y;
     const common::real PARTICLE_RADIUS = 0.01;
     #ifdef eGPU
-    const common::real HORIZON_MAX_COORDINATE = PARTICLE_COUNT_PER_EDGE_XZ * PARTICLE_RADIUS * 2.0 * 2.5;
+    const common::real HORIZON_MAX_COORDINATE = PARTICLE_COUNT_PER_EDGE_XZ * PARTICLE_RADIUS * 5.0;
     #else
     const common::real HORIZON_MAX_COORDINATE = PARTICLE_COUNT_PER_EDGE_XZ * PARTICLE_RADIUS * 2.0 * 4.0;
     #endif
-    const common::real MAX_HEIGHT = (PARTICLE_COUNT_PER_EDGE_Y + 100) * PARTICLE_RADIUS * 2.0;
+    const common::real MAX_HEIGHT = (PARTICLE_COUNT_PER_EDGE_Y + 60) * PARTICLE_RADIUS * 2.0;
     const common::real DELTA_TIME = 0.0016;
     const common::real DELTA_TIME_REVERSE = 1.0 / DELTA_TIME;
 
@@ -82,4 +88,6 @@ namespace simulator {
 
     int computeCurl();
     int particlePositionInit();
+
+    int manipulateVelocity();
 }
