@@ -16,29 +16,11 @@ namespace renderer {
                 Scene(Camera& camera, unsigned int width, unsigned int height);
                 ~Scene();
                 
-                // // off screen information used later
-                // GLuint colorTexture;
-                // GLuint validTexture;
-                // GLuint depthTexture;
-                // GLuint positionTexture;
-                // GLuint normalTexture;
-
-                // // classification color
-                // GLuint skyboxColorTexture;
-                // GLuint floorColorTexture;
-                
-                // // others
-                // GLuint skyboxTexture;
-
                 int render();
 
                 std::shared_ptr<renderer::info::SceneInfo> m_info;
             
             private:
-                // Camera& camera;
-                // unsigned int width;
-                // unsigned int height;
-
                 GLuint FBO;
 
                 GLuint skyboxFBO;
@@ -48,7 +30,11 @@ namespace renderer {
                 GLuint floorFBO;
                 GLuint floorVAO;
                 GLuint floorVBO;
-                GLuint floorTexture;
+                GLuint floorTextureRealistic;
+                GLuint floorTextureCartoon;
+
+                GLuint skyboxTextureRealistic;
+                GLuint skyboxTextureCartoon;
 
                 int clear();
 

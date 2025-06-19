@@ -16,7 +16,7 @@
 #include "info.hpp"
 
 namespace renderer {
-    bool enableCaustics = true;
+    bool enableCaustics = false;
     RenderMode renderMode = FLUID_AND_SCENE;
 
     // performance log

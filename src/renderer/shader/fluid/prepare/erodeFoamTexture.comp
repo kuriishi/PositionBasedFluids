@@ -1,0 +1,46 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(binding = 3, r8i) uniform readonly iimage2D uFoamTexture;
+layout(binding = 4, r8i) uniform writeonly iimage2D uErodedFoamTexture;
+
+uniform ivec2 uResolution;
+uniform int uKernelRadius;
+uniform int uMinimunNeighborCount;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    ivec2 texelCoord = ivec2(index % uResolution.x, index / uResolution.x);
+    if (texelCoord.x >= uResolution.x || texelCoord.y >= uResolution.y) {
+        return;
+    }
+
+    int neighborCount = 0;
+    int foam = imageLoad(uFoamTexture, texelCoord).r;
+    if (foam == 1) {
+        for (int i = -uKernelRadius; i <= uKernelRadius; i++) {
+            for (int j = -uKernelRadius; j <= uKernelRadius; j++) {
+                ivec2 neighborCoord = texelCoord + ivec2(i, j);
+                if (neighborCoord.x < 0 || neighborCoord.x >= uResolution.x || neighborCoord.y < 0 || neighborCoord.y >= uResolution.y) {
+                    continue;
+                }
+
+                int neighborFoam = imageLoad(uFoamTexture, neighborCoord).r;
+                if (neighborFoam == 1) {
+                    neighborCount++;
+                }
+            }
+        }
+
+        if (neighborCount < uMinimunNeighborCount) {
+            imageStore(uErodedFoamTexture, texelCoord, ivec4(0));
+        } 
+        else {
+            imageStore(uErodedFoamTexture, texelCoord, ivec4(1));
+        }
+    }
+    else {
+        imageStore(uErodedFoamTexture, texelCoord, ivec4(0));
+    }
+}

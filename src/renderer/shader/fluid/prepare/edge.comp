@@ -1,0 +1,30 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(binding = 0, r8i) uniform readonly iimage2D uFluidValidTexture;
+layout(binding = 1, r8i) uniform writeonly iimage2D uEdgeTexture;
+
+uniform ivec2 uResolution;
+uniform int uKernelRadius;
+uniform int uMinimunNeighborCount;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    ivec2 texelCoord = ivec2(index % uResolution.x, index / uResolution.x);
+    if (texelCoord.x >= uResolution.x || texelCoord.y >= uResolution.y) {
+        return;
+    }
+
+    int validCount = 0;
+    for (int i = -uKernelRadius; i <= uKernelRadius; i++) {
+        for (int j = -uKernelRadius; j <= uKernelRadius; j++) {
+            if (imageLoad(uFluidValidTexture, texelCoord + ivec2(i, j)).r == 1) {
+                validCount++;
+            }
+        }
+    }
+    if (validCount >= uMinimunNeighborCount) {
+        imageStore(uEdgeTexture, texelCoord, ivec4(1));
+    }
+}

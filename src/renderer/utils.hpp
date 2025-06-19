@@ -37,5 +37,7 @@ namespace renderer {
 
         // e.g. sizeInBytes = PARTICLE_COUNT * sizeof(glm::vec4)
         void copySSBO2VBO(GLuint ssbo, GLuint vbo, GLuint sizeInBytes);
+
+        void copyTexture2D(GLuint srcTexture, GLuint dstTexture, GLuint width, GLuint height);
     }
 }

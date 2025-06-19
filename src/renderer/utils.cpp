@@ -189,5 +189,17 @@ namespace renderer {
             glBindBuffer(GL_COPY_READ_BUFFER, 0);
             glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
         }
+
+        void copyTexture2D(GLuint srcTexture, GLuint dstTexture, GLuint width, GLuint height) {
+            glCopyImageSubData(
+                srcTexture, GL_TEXTURE_2D, 0, 
+                0, 0, 0,
+                dstTexture, GL_TEXTURE_2D, 0,
+                0, 0, 0,
+                width, height, 1
+            );
+
+            glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
+        }
     }
 }

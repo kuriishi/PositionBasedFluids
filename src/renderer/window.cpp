@@ -13,7 +13,7 @@ namespace renderer {
         GLFWwindow* window;
 
         // camera
-        Camera camera(glm::vec3(0.0f, 1.5f, -2.5f), glm::vec3(0.0f, 0.0f, 1.0f));
+        Camera camera(glm::vec3(0.0f, 1.5f, 2.5f), glm::vec3(0.0f, 0.0f, 1.0f));
         common::real lastX = SCR_WIDTH / 1.5;
         common::real lastY = SCR_HEIGHT / 1.5;
         bool firstMouse = true;

@@ -1,0 +1,67 @@
+#version 430 core
+
+layout(local_size_x = 256) in;
+
+layout(binding = 0, rgba32f) uniform readonly image2D inputNormalTexture;
+layout(binding = 1, rgba32f) uniform writeonly image2D outputNormalTexture;
+
+uniform ivec2 uResolution;
+
+const int KERNEL_RADIUS = 1;
+
+bool isValidNormal(vec3 normal) {
+    if (any(isnan(normal))) {
+        return false;
+    }
+    
+    float length = dot(normal, normal);
+    if (length < 1e-6) {
+        return false;
+    }
+    
+    return true;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    ivec2 texelCoord = ivec2(index % uResolution.x, index / uResolution.x);
+    if (texelCoord.x >= uResolution.x || texelCoord.y >= uResolution.y) {
+        return;
+    }
+
+    vec3 currentNormal = imageLoad(inputNormalTexture, texelCoord).xyz;
+    if (isValidNormal(currentNormal)) {
+        imageStore(outputNormalTexture, texelCoord, vec4(currentNormal, 1.0));
+        return;
+    }
+    
+    vec3 validNormalSum = vec3(0.0);
+    int validCount = 0;
+    
+    for (int dy = -KERNEL_RADIUS; dy <= KERNEL_RADIUS; dy++) {
+        for (int dx = -KERNEL_RADIUS; dx <= KERNEL_RADIUS; dx++) {
+            ivec2 neighborCoord = texelCoord + ivec2(dx, dy);
+            
+            if (neighborCoord.x < 0 || neighborCoord.x >= uResolution.x ||
+                neighborCoord.y < 0 || neighborCoord.y >= uResolution.y) {
+                continue;
+            }
+            
+            vec3 neighborNormal = imageLoad(inputNormalTexture, neighborCoord).xyz;
+            
+            if (isValidNormal(neighborNormal)) {
+                validNormalSum += neighborNormal;
+                validCount++;
+            }
+        }
+    }
+    
+    vec3 repairedNormal;
+    if (validCount > 0) {
+        repairedNormal = normalize(validNormalSum / float(validCount));
+    } else {
+        repairedNormal = vec3(0.0, 0.0, 1.0);
+    }
+    
+    imageStore(outputNormalTexture, texelCoord, vec4(repairedNormal, 1.0));
+}

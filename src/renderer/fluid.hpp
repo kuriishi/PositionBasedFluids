@@ -9,22 +9,6 @@
 
 namespace renderer {
     namespace fluid {
-        enum DisplayMode {
-            FLUID,
-            NORMAL,
-            THICKNESS,
-            DEPTH,
-            PARTICLE
-        };
-
-        // gui parameters
-        extern DisplayMode displayMode;
-        extern bool enableSmoothDepth;
-        extern int smoothIteration;
-        extern float particleRadiusScaler;
-        extern float minimumDensityScaler;
-        extern float thicknessScaler;
-        extern float fluidColor[3];
 
         class Fluid {
             public:
@@ -49,6 +33,7 @@ namespace renderer {
                 GLuint smoothedDepthAidTexture;
                 GLuint thicknessTexture;
                 GLuint normalViewSpaceTexture;
+                GLuint repairedNormalViewSpaceTexture;
 
                 GLuint densityVBO;
 
@@ -56,14 +41,27 @@ namespace renderer {
                 int clear();
                 int renderDepthTexture();
                 int renderThicknessTexture();
-                int smoothDepthTexture();
+                int smoothDepthTexture(int kernelRadius);
                 int computeNormalTexture();
+                int fixInvalidNormals();
 
                 int renderFluid();
                 int renderDepth();
                 int renderThickness();
                 int renderNormal();
                 int renderParticle();
+
+                GLuint foamFBO;
+                GLuint foamTexture;
+                GLuint erodedFoamTexture;
+                GLuint edgeTexture;
+
+                int renderCartoon();
+                int renderFoamTexture();
+                int renderFoam();
+                int erodeFoamTexture();
+                int computeEdgeTexture();
+                int renderEdge();
 
                 int copyParticleAttribute();
         };

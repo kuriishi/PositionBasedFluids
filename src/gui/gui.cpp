@@ -7,9 +7,10 @@
 #include "../renderer/window.hpp"
 #include "../common/performance_log.hpp"
 #include "../renderer/renderer.hpp"
-#include "../renderer/fluid.hpp"
 #include "../renderer/scene.hpp"
 #include "../simulator/simulator.hpp"
+
+#include "../renderer/parameter.hpp"
 
 namespace gui {
     int guiInit() {
@@ -84,6 +85,7 @@ namespace gui {
 
                 ImGui::Checkbox("Smooth Depth", &renderer::fluid::enableSmoothDepth);
                 ImGui::SliderInt("Smooth Iteration", &renderer::fluid::smoothIteration, 1, 256);
+                ImGui::Checkbox("Separate Bilateral Filter", &renderer::fluid::separateBilateralFilter);
                 static float particleRadiusScaler = renderer::fluid::particleRadiusScaler * 0.1f;
                 ImGui::SliderFloat("Particle Radius Scaler", &particleRadiusScaler, 0.0f, 1.0f);
                 renderer::fluid::particleRadiusScaler = particleRadiusScaler * 10.0f;
@@ -91,11 +93,34 @@ namespace gui {
                 ImGui::SliderFloat("Minimum Density Scaler", &minimumDensityScaler, 0.0f, 1.0f);
                 renderer::fluid::minimumDensityScaler = minimumDensityScaler * 2.0f;
 
+                if (renderer::fluid::displayMode == renderer::fluid::DisplayMode::CARTOON || renderer::fluid::displayMode == renderer::fluid::DisplayMode::FOAM) {
+                    static float foamDensityScaler = renderer::fluid::foamDensityScaler * 0.5f;
+                    ImGui::SliderFloat("Foam Density Scaler", &foamDensityScaler, 0.0f, 1.0f);
+                    renderer::fluid::foamDensityScaler = foamDensityScaler * 2.0f;
+                    if (renderer::fluid::foamDensityScaler < renderer::fluid::minimumDensityScaler) {
+                        renderer::fluid::foamDensityScaler = renderer::fluid::minimumDensityScaler;
+                    }
+
+                    ImGui::Separator();
+
+                    ImGui::SliderInt("Foam Erode Kernel Radius", &renderer::fluid::foamErodeKernelRadius, 1, 16);
+                    ImGui::SliderInt("Foam Erode Minimun Neighbor Count", &renderer::fluid::foamErodeMinimunNeighborCount, 1, 128);
+                }
+
+
                 ImGui::Separator();
 
                 if (renderer::renderMode == renderer::RenderMode::FLUID_AND_SCENE) {
                     if (ImGui::RadioButton("Fluid", renderer::fluid::displayMode == renderer::fluid::DisplayMode::FLUID)) 
                         renderer::fluid::displayMode = renderer::fluid::DisplayMode::FLUID;
+                    if (ImGui::RadioButton("Cartoon", renderer::fluid::displayMode == renderer::fluid::DisplayMode::CARTOON)) 
+                        renderer::fluid::displayMode = renderer::fluid::DisplayMode::CARTOON;
+                    
+                    if (renderer::fluid::displayMode == renderer::fluid::DisplayMode::CARTOON || renderer::fluid::displayMode == renderer::fluid::DisplayMode::FOAM) {
+                        if (ImGui::RadioButton("Foam", renderer::fluid::displayMode == renderer::fluid::DisplayMode::FOAM)) 
+                            renderer::fluid::displayMode = renderer::fluid::DisplayMode::FOAM;
+                    }
+
                     if (ImGui::RadioButton("Thickness", renderer::fluid::displayMode == renderer::fluid::DisplayMode::THICKNESS)) 
                         renderer::fluid::displayMode = renderer::fluid::DisplayMode::THICKNESS;
                     if (ImGui::RadioButton("Normal", renderer::fluid::displayMode == renderer::fluid::DisplayMode::NORMAL)) 
@@ -110,15 +135,42 @@ namespace gui {
                     ImGui::ColorEdit3("Fluid Color", renderer::fluid::fluidColor);
                     static float photonEnergy = renderer::sceneWithCaustics::uPhotonEnergy * 40.0f;
 
-                    ImGui::Checkbox("Enable Caustics", &renderer::enableCaustics);
-                    if (renderer::enableCaustics) {
-                        ImGui::SliderFloat("Photon Energy", &photonEnergy, 0.0f, 1.0f);
-                        renderer::sceneWithCaustics::uPhotonEnergy = photonEnergy * 0.025f;
-                        static float photonSize = renderer::sceneWithCaustics::uPhotonSize * 2.0f;
-                        ImGui::SliderFloat("Photon Size", &photonSize, 0.0f, 1.0f);
-                        renderer::sceneWithCaustics::uPhotonSize = photonSize * 0.5f;
-                        ImGui::SliderInt("Blur Count", &renderer::sceneWithCaustics::blurCount, 0, 10);
+                    if (renderer::fluid::displayMode != renderer::fluid::DisplayMode::FOAM && renderer::fluid::displayMode != renderer::fluid::DisplayMode::CARTOON) {
+                        ImGui::Checkbox("Enable Caustics", &renderer::enableCaustics);
+                        if (renderer::enableCaustics) {
+                            ImGui::SliderFloat("Photon Energy", &photonEnergy, 0.0f, 1.0f);
+                            renderer::sceneWithCaustics::uPhotonEnergy = photonEnergy * 0.025f;
+                            static float photonSize = renderer::sceneWithCaustics::uPhotonSize * 2.0f;
+                            ImGui::SliderFloat("Photon Size", &photonSize, 0.0f, 1.0f);
+                            renderer::sceneWithCaustics::uPhotonSize = photonSize * 0.5f;
+                            ImGui::SliderInt("Blur Count", &renderer::sceneWithCaustics::blurCount, 0, 10);
+                        }
                     }
+                }
+
+                // cartoon
+                ImGui::Separator();
+
+                if (renderer::fluid::displayMode == renderer::fluid::DisplayMode::CARTOON) {
+                    ImGui::SliderFloat("Bright Threshold", &renderer::fluid::brightThreshold, 0.0f, 1.0f);
+                    ImGui::SliderFloat("Dark Threshold", &renderer::fluid::darkThreshold, 0.0f, 1.0f);
+                    if (renderer::fluid::darkThreshold > renderer::fluid::brightThreshold) {
+                        renderer::fluid::darkThreshold = renderer::fluid::brightThreshold;
+                    }
+                    ImGui::SliderFloat("Bright Factor", &renderer::fluid::brightFactor, 1.0f, 5.0f);
+                    ImGui::SliderFloat("Dark Factor", &renderer::fluid::darkFactor, 0.0f, 1.0f);
+
+                    ImGui::SliderFloat("Refract Threshold", &renderer::fluid::refractThreshold, 0.0f, 1.0f);
+                    ImGui::SliderFloat("Reflect Threshold", &renderer::fluid::reflectThreshold, 0.0f, 1.0f);
+                    if (renderer::fluid::reflectThreshold > renderer::fluid::refractThreshold) {
+                        renderer::fluid::reflectThreshold = renderer::fluid::refractThreshold;
+                    }
+                    ImGui::SliderFloat("Refract Max", &renderer::fluid::refractMax, 0.0f, 1.0f);
+                    ImGui::SliderFloat("Reflect Max", &renderer::fluid::reflectMax, 0.0f, 1.0f);
+
+                    ImGui::Separator();
+
+                    ImGui::SliderInt("Edge Kernel Radius", &renderer::fluid::edgeKernelRadius, 1, 16);
                 }
             }
 

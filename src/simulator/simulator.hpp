@@ -29,7 +29,7 @@ namespace simulator {
     #else
     const unsigned int PARTICLE_COUNT_PER_EDGE_XZ = 16;
     #endif
-    const unsigned int PARTICLE_COUNT_PER_EDGE_Y = 100;
+    const unsigned int PARTICLE_COUNT_PER_EDGE_Y = 128;
     const unsigned int PARTICLE_COUNT = PARTICLE_COUNT_PER_EDGE_XZ * PARTICLE_COUNT_PER_EDGE_XZ * PARTICLE_COUNT_PER_EDGE_Y;
     const common::real PARTICLE_RADIUS = 0.01;
     #ifdef eGPU

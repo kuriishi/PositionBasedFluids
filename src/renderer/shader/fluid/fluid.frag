@@ -14,6 +14,7 @@ uniform ivec2 uScreenSize;
 uniform vec3 uFluidColor;
 uniform float uPointSize;
 uniform float uMinimumDensity;
+uniform vec3 uCameraPosition;
 // textures
 uniform sampler2D uNormalViewSpaceTexture;
 uniform sampler2D uThicknessTexture;
@@ -38,7 +39,7 @@ void main() {
     vec3 posViewSpace = vCenterPosViewSpace + normalViewSpace * uPointSize;
     vec3 posWorldSpace = (uViewInverse * vec4(posViewSpace, 1.0)).xyz;
 
-    vec3 I = normalize(posViewSpace);
+    vec3 I = normalize(uCameraPosition - posWorldSpace);
     vec3 N = normalWorldSpace;
 
     // refract

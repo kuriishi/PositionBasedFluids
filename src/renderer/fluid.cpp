@@ -10,6 +10,7 @@
 #include "../simulator/simulator.hpp"
 #include "scene.hpp"
 #include "utils.hpp"
+#include "parameter.hpp"
 
 namespace renderer {
     namespace fluid {
@@ -17,27 +18,48 @@ namespace renderer {
         const unsigned int QUERY_START_INDEX = common::SIMULATE_TIME_QUERY_COUNT + 2;
         
         // gui parameters
-        DisplayMode displayMode = DisplayMode::FLUID;
+        DisplayMode displayMode = DisplayMode::CARTOON;
         bool enableSmoothDepth = true;
         int smoothIteration = 8;
+        int smoothKernelRadius = 15;
+        bool separateBilateralFilter = true;
         float particleRadiusScaler = 2.0f;
-        float minimumDensityScaler = 0.32f;
+        float minimumDensityScaler = 0.2f;
         float thicknessScaler = 0.05f;
         // rgb(66, 132, 244)
         float fluidColor[3] = {66.0f / 255.0f, 132.0f / 255.0f, 244.0f / 255.0f};
+        // cartoon
+        float brightThreshold = 0.7f;
+        float darkThreshold = 0.3f;
+        float brightFactor = 1.5f;
+        float darkFactor = 0.5f;
+        float refractThreshold = 0.7f;
+        float reflectThreshold = 0.4f;
+        float refractMax = 0.7f;
+        float reflectMax = 0.2f;
+        float foamDensityScaler = 0.5f;
+        int foamErodeKernelRadius = 4;
+        int foamErodeMinimunNeighborCount = 64;
+        int edgeKernelRadius = 3;
 
         // common shaders
         Shader renderFluidShader;
+        Shader renderCartoonShader;
         Shader renderFluidDepthShader;
         Shader renderFluidNormalShader;
         Shader renderFluidThicknessShader;
         Shader particleShader;
         Shader renderFluidDepthTextureShader;
         Shader renderFluidThicknessTextureShader;
+        Shader renderFoamTextureShader;
+        Shader renderFoamShader;
+        Shader renderEdgeShader;
         ComputeShader clearCS;
-        ComputeShader smoothFluidDepthHorizontalCS;
-        ComputeShader smoothFluidDepthVerticalCS;
+        ComputeShader smoothDepthCS;
         ComputeShader computeFluidNormalCS;
+        ComputeShader erodeFoamTextureCS;
+        ComputeShader edgeCS;
+        ComputeShader fixInvalidNormalsCS;
 
         Fluid::Fluid(Camera& camera, unsigned int width, unsigned int height, std::shared_ptr<renderer::info::SceneInfo> sceneInfo) 
                     : m_info(std::make_shared<renderer::info::FluidInfo>(camera, width, height)),
@@ -49,17 +71,25 @@ namespace renderer {
             // init shaders
             {
             renderFluidShader = Shader("src/renderer/shader/fluid/fluid.vert", "src/renderer/shader/fluid/fluid.frag");
+            renderCartoonShader = Shader("src/renderer/shader/fluid/fluid.vert", "src/renderer/shader/fluid/cartoon.frag");
             renderFluidDepthShader = Shader("src/renderer/shader/fluid/fluid.vert", "src/renderer/shader/fluid/fluidDepth.frag");
             renderFluidNormalShader = Shader("src/renderer/shader/fluid/fluid.vert", "src/renderer/shader/fluid/fluidNormal.frag");
             renderFluidThicknessShader = Shader("src/renderer/shader/fluid/fluid.vert", "src/renderer/shader/fluid/fluidThickness.frag");
             particleShader = Shader("src/renderer/shader/fluid/fluid.vert", "src/renderer/shader/fluid/particle.frag");
             renderFluidDepthTextureShader = Shader("src/renderer/shader/fluid/fluid.vert", "src/renderer/shader/fluid/prepare/fluidDepthTexture.frag");
             renderFluidThicknessTextureShader = Shader("src/renderer/shader/fluid/fluid.vert", "src/renderer/shader/fluid/prepare/fluidThicknessTexture.frag");
+            renderFoamTextureShader = Shader("src/renderer/shader/fluid/fluid.vert", "src/renderer/shader/fluid/prepare/foamTexture.frag");
+            renderFoamShader = Shader("src/renderer/shader/screenQuad.vert", "src/renderer/shader/fluid/foam.frag");
+            renderEdgeShader = Shader("src/renderer/shader/screenQuad.vert", "src/renderer/shader/fluid/edge.frag");
             clearCS = ComputeShader("src/renderer/shader/fluid/prepare/clear.comp");
-            smoothFluidDepthHorizontalCS = ComputeShader("src/renderer/shader/fluid/prepare/smoothFluidDepthHorizontal.comp");
-            smoothFluidDepthVerticalCS = ComputeShader("src/renderer/shader/fluid/prepare/smoothFluidDepthVertical.comp");
+            smoothDepthCS = ComputeShader("src/renderer/shader/fluid/prepare/smoothDepth.comp");
             computeFluidNormalCS = ComputeShader("src/renderer/shader/fluid/prepare/computeFluidNormal.comp");
+            erodeFoamTextureCS = ComputeShader("src/renderer/shader/fluid/prepare/erodeFoamTexture.comp");
+            edgeCS = ComputeShader("src/renderer/shader/fluid/prepare/edge.comp");
+            fixInvalidNormalsCS = ComputeShader("src/renderer/shader/fluid/prepare/fixInvalidNormals.comp");
             }
+            ComputeShader erodeFoamTextureCS;
+            erodeFoamTextureCS = ComputeShader("src/renderer/shader/fluid/prepare/erodeFoamTexture.comp");
 
             // whole framebuffer
             {
@@ -105,11 +135,32 @@ namespace renderer {
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             }
 
+            // foam framebuffer
+            {
+            glGenFramebuffers(1, &foamFBO);
+            glBindFramebuffer(GL_FRAMEBUFFER, foamFBO);
+
+            utils::bindDepthAttachment(m_info->depthTexture);
+
+            foamTexture = utils::generateTextureR8I(m_info->width, m_info->height);
+            utils::bindColorAttachment(foamTexture, 0);
+
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {  
+                std::cerr << "ERROR::FRAMEBUFFER:: Foam framebuffer is not complete!" << std::endl;
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            erodedFoamTexture = utils::generateTextureR8I(m_info->width, m_info->height);
+            }
+
             // aid depth texture for smoothing
             smoothedDepthAidTexture = utils::generateTextureR32F(m_info->width, m_info->height);
 
             // normal texture
             normalViewSpaceTexture = utils::generateTextureRGBA32F(m_info->width, m_info->height);
+            repairedNormalViewSpaceTexture = utils::generateTextureRGBA32F(m_info->width, m_info->height);
+
+            edgeTexture = utils::generateTextureR8I(m_info->width, m_info->height);
 
             // vertex array and buffer
             {
@@ -214,23 +265,26 @@ namespace renderer {
             return 0;
         }
 
-        int Fluid::smoothDepthTexture() {
-            smoothFluidDepthHorizontalCS.use();
-            smoothFluidDepthHorizontalCS.setInt("SCR_WIDTH", m_info->width);
-            smoothFluidDepthHorizontalCS.setInt("SCR_HEIGHT", m_info->height);
+        int Fluid::smoothDepthTexture(int kernelRadius) {
+            smoothDepthCS.use();
+            smoothDepthCS.setInt("SCR_WIDTH", m_info->width);
+            smoothDepthCS.setInt("SCR_HEIGHT", m_info->height);
+            smoothDepthCS.setInt("uKernelRadius", kernelRadius);
+            smoothDepthCS.setInt("uSeparate", separateBilateralFilter ? 1 : 0);
+            utils::bindTextureWithLayer0(m_info->validTexture, 2, GL_R8I, GL_READ_ONLY);
+
+            // horizontal
+            smoothDepthCS.setInt("uHorizontal", 1);
             utils::bindTextureWithLayer0(m_info->smoothedDepthTexture, 0, GL_R32F, GL_READ_ONLY);
             utils::bindTextureWithLayer0(smoothedDepthAidTexture, 1, GL_R32F, GL_WRITE_ONLY);
-            utils::bindTextureWithLayer0(m_info->validTexture, 2, GL_R8I, GL_READ_ONLY);
-            smoothFluidDepthHorizontalCS.dispatchCompute(m_info->width * m_info->height);
+            smoothDepthCS.dispatchCompute(m_info->width * m_info->height);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-            smoothFluidDepthVerticalCS.use();
-            smoothFluidDepthVerticalCS.setInt("SCR_WIDTH", m_info->width);
-            smoothFluidDepthVerticalCS.setInt("SCR_HEIGHT", m_info->height);
+            // vertical
+            smoothDepthCS.setInt("uHorizontal", 0);
             utils::bindTextureWithLayer0(smoothedDepthAidTexture, 0, GL_R32F, GL_READ_ONLY);
             utils::bindTextureWithLayer0(m_info->smoothedDepthTexture, 1, GL_R32F, GL_WRITE_ONLY);
-            utils::bindTextureWithLayer0(m_info->validTexture, 2, GL_R8I, GL_READ_ONLY);
-            smoothFluidDepthVerticalCS.dispatchCompute(m_info->width * m_info->height);
+            smoothDepthCS.dispatchCompute(m_info->width * m_info->height);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
             return 0;
@@ -249,6 +303,22 @@ namespace renderer {
 
             computeFluidNormalCS.dispatchCompute(m_info->width * m_info->height);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+            fixInvalidNormals();
+
+            return 0;
+        }
+
+        int Fluid::fixInvalidNormals() {
+            fixInvalidNormalsCS.use();
+            fixInvalidNormalsCS.setIvec2("uResolution", glm::ivec2(m_info->width, m_info->height));
+            utils::bindTextureWithLayer0(normalViewSpaceTexture, 0, GL_RGBA32F, GL_READ_ONLY);
+            utils::bindTextureWithLayer0(repairedNormalViewSpaceTexture, 1, GL_RGBA32F, GL_WRITE_ONLY);
+
+            fixInvalidNormalsCS.dispatchCompute(m_info->width * m_info->height);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+            utils::copyTexture2D(repairedNormalViewSpaceTexture, normalViewSpaceTexture, m_info->width, m_info->height);
 
             return 0;
         }
@@ -269,8 +339,11 @@ namespace renderer {
             }
 
             if (enableSmoothDepth) {
+                float kernelRadius = static_cast<float>(smoothKernelRadius);
+                float delta = static_cast<float>(smoothKernelRadius - 1) / (smoothIteration - 1);
                 for (int i = 0; i < smoothIteration; i++) {
-                    smoothDepthTexture();
+                    smoothDepthTexture(static_cast<int>(kernelRadius));
+                    kernelRadius -= delta;
                 }
             }
 
@@ -314,6 +387,7 @@ namespace renderer {
             renderFluidShader.setVec3("uFluidColor", glm::vec3(fluidColor[0], fluidColor[1], fluidColor[2]));
             renderFluidShader.setFloat("uPointSize", static_cast<float>(simulator::PARTICLE_RADIUS * particleRadiusScaler));
             renderFluidShader.setFloat("uMinimumDensity", static_cast<float>(minimumDensityScaler * simulator::REST_DENSITY));
+            renderFluidShader.setVec3("uCameraPosition", m_info->position());
             // textures
             utils::bindTexture2D(renderFluidShader, "uNormalViewSpaceTexture", normalViewSpaceTexture, 0);
             utils::bindTexture2D(renderFluidShader, "uThicknessTexture", thicknessTexture, 1);
@@ -323,13 +397,15 @@ namespace renderer {
 
             glBindVertexArray(VAO);
             glDrawArrays(GL_POINTS, 0, simulator::PARTICLE_COUNT);
-
             glBindVertexArray(0);
+
             glDisable(GL_PROGRAM_POINT_SIZE);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
             return 0;
         }
+
+
 
         int Fluid::renderDepth() {
             glBindFramebuffer(GL_FRAMEBUFFER, FBO);
@@ -493,6 +569,158 @@ namespace renderer {
             return 0;
         }
 
+        int Fluid::renderFoamTexture() {
+            glBindFramebuffer(GL_FRAMEBUFFER, foamFBO);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            
+            glEnable(GL_PROGRAM_POINT_SIZE);
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LESS);
+
+            renderFoamTextureShader.use();
+            glm::mat4 uView = m_info->view();
+            renderFoamTextureShader.setMat4("uView", uView);
+            glm::mat4 uProjection = m_info->projection();
+            renderFoamTextureShader.setMat4("uProjection", uProjection);
+            renderFoamTextureShader.setFloat("uPointSize", static_cast<float>(simulator::PARTICLE_RADIUS * particleRadiusScaler));
+            // other parameters
+            renderFoamTextureShader.setFloat("uMinimumDensity", static_cast<float>(minimumDensityScaler * simulator::REST_DENSITY));
+            renderFoamTextureShader.setFloat("uFoamDensity", static_cast<float>(foamDensityScaler * simulator::REST_DENSITY));
+
+            glBindVertexArray(VAO);
+            glDrawArrays(GL_POINTS, 0, simulator::PARTICLE_COUNT);
+            glBindVertexArray(0);
+
+            glDisable(GL_PROGRAM_POINT_SIZE);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            return 0;
+        }
+
+        int Fluid::erodeFoamTexture() {
+            erodeFoamTextureCS.use();
+            erodeFoamTextureCS.setIvec2("uResolution", glm::ivec2(m_info->width, m_info->height));
+            erodeFoamTextureCS.setInt("uKernelRadius", foamErodeKernelRadius);
+            erodeFoamTextureCS.setInt("uMinimunNeighborCount", foamErodeMinimunNeighborCount);
+            utils::bindTextureWithLayer0(foamTexture, 3, GL_R8I, GL_READ_ONLY);
+            utils::bindTextureWithLayer0(erodedFoamTexture, 4, GL_R8I, GL_WRITE_ONLY);
+
+            erodeFoamTextureCS.dispatchCompute(m_info->width * m_info->height);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+            return 0;
+        }
+
+        int Fluid::renderFoam() {
+            renderFoamTexture();
+            erodeFoamTexture();
+
+            glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+            
+            if (displayMode == DisplayMode::FOAM) {
+                glClear(GL_COLOR_BUFFER_BIT);
+            }
+            
+            renderFoamShader.use();
+            utils::bindTexture2D(renderFoamShader, "uFoamTexture", erodedFoamTexture, 0);
+
+            utils::drawScreenQuad();
+
+            glDisable(GL_PROGRAM_POINT_SIZE);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            return 0;
+        }
+
+        int Fluid::computeEdgeTexture() {
+            edgeCS.use();
+            edgeCS.setInt("uKernelRadius", edgeKernelRadius);
+            edgeCS.setIvec2("uResolution", glm::ivec2(m_info->width, m_info->height));
+            utils::bindTextureWithLayer0(m_info->validTexture, 0, GL_R8I, GL_READ_ONLY);
+            utils::bindTextureWithLayer0(edgeTexture, 1, GL_R8I, GL_WRITE_ONLY);
+
+            edgeCS.dispatchCompute(m_info->width * m_info->height);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+            utils::copyTexture2D(edgeTexture, m_info->validTexture, m_info->width, m_info->height);
+
+            return 0;
+        }
+
+        int Fluid::renderEdge() {
+            computeEdgeTexture();
+
+            glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            
+            renderEdgeShader.use();
+            utils::bindTexture2D(renderEdgeShader, "uEdgeTexture", edgeTexture, 0);
+
+            utils::drawScreenQuad();
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            return 0;
+        }
+
+        int Fluid::renderCartoon() {
+            // renderEdge();
+
+            glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            // glClear(GL_DEPTH_BUFFER_BIT);
+
+            glEnable(GL_PROGRAM_POINT_SIZE);
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LESS);
+            glDepthMask(GL_TRUE);
+
+            renderCartoonShader.use();
+            // MVP transform
+            glm::mat4 uView = m_info->view();
+            renderCartoonShader.setMat4("uView", uView);
+            glm::mat4 uProjection = m_info->projection();
+            renderCartoonShader.setMat4("uProjection", uProjection);
+            glm::mat4 viewInverse = glm::inverse(uView);
+            renderCartoonShader.setMat4("uViewInverse", viewInverse);
+            glm::mat4 viewTranspose = glm::transpose(uView);
+            renderCartoonShader.setMat4("uViewTranspose", viewTranspose);
+            // parameters
+            renderCartoonShader.setIvec2("uScreenSize", glm::ivec2(m_info->width, m_info->height));
+            renderCartoonShader.setVec3("uFluidColor", glm::vec3(fluidColor[0], fluidColor[1], fluidColor[2]));
+            renderCartoonShader.setFloat("uPointSize", static_cast<float>(simulator::PARTICLE_RADIUS * particleRadiusScaler));
+            renderCartoonShader.setFloat("uMinimumDensity", static_cast<float>(minimumDensityScaler * simulator::REST_DENSITY));
+            renderCartoonShader.setVec3("uCameraPosition", m_info->position());
+            // textures
+            utils::bindTexture2D(renderCartoonShader, "uNormalViewSpaceTexture", normalViewSpaceTexture, 0);
+            utils::bindTexture2D(renderCartoonShader, "uThicknessTexture", thicknessTexture, 1);
+            utils::bindTexture2D(renderCartoonShader, "uSceneColorTexture", m_sceneInfo->colorTexture, 2);
+            utils::bindTexture2D(renderCartoonShader, "uSmoothedDepthTexture", m_info->smoothedDepthTexture, 3);
+            utils::bindTextureCubeMap(renderCartoonShader, "uSkyboxTexture", m_sceneInfo->skyboxTexture, 4);
+            utils::bindTexture2D(renderCartoonShader, "uValidTexture", m_info->validTexture, 5);
+            // cartoon
+            renderCartoonShader.setFloat("uBrightThreshold", brightThreshold);
+            renderCartoonShader.setFloat("uBrightFactor", brightFactor);
+            renderCartoonShader.setFloat("uDarkThreshold", darkThreshold);
+            renderCartoonShader.setFloat("uDarkFactor", darkFactor);
+            renderCartoonShader.setFloat("uRefractThreshold", refractThreshold);
+            renderCartoonShader.setFloat("uRefractMax", refractMax);
+            renderCartoonShader.setFloat("uReflectThreshold", reflectThreshold);
+            renderCartoonShader.setFloat("uReflectMax", reflectMax);
+            renderCartoonShader.setInt("uEdgeKernelRadius", edgeKernelRadius);
+
+            glBindVertexArray(VAO);
+            glDrawArrays(GL_POINTS, 0, simulator::PARTICLE_COUNT);
+            glBindVertexArray(0);
+
+            glDisable(GL_PROGRAM_POINT_SIZE);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            renderFoam();
+
+            return 0;
+        }
+        
         int Fluid::render(bool prepare) {
             m_info->setViewport();
 
@@ -501,6 +729,15 @@ namespace renderer {
             }
 
             switch (displayMode) {
+                case DisplayMode::FLUID:
+                    renderFluid();
+                    break;
+                case DisplayMode::CARTOON:
+                    renderCartoon();
+                    break;
+                case DisplayMode::FOAM:
+                    renderFoam();
+                    break;
                 case DisplayMode::DEPTH:
                     renderDepth();
                     break;
@@ -509,9 +746,6 @@ namespace renderer {
                     break;
                 case DisplayMode::NORMAL:
                     renderNormal();
-                    break;
-                case DisplayMode::FLUID:
-                    renderFluid();
                     break;
                 case DisplayMode::PARTICLE:
                     renderParticle();
@@ -533,14 +767,16 @@ namespace renderer {
             glDeleteFramebuffers(1, &thicknessFBO);
             glDeleteTextures(1, &smoothedDepthAidTexture);
             glDeleteTextures(1, &normalViewSpaceTexture);
+            glDeleteTextures(1, &repairedNormalViewSpaceTexture);
 
             glDeleteProgram(renderFluidShader.ID);
+            glDeleteProgram(renderCartoonShader.ID);
             glDeleteProgram(renderFluidDepthShader.ID);
             glDeleteProgram(renderFluidDepthTextureShader.ID);
             glDeleteProgram(renderFluidThicknessTextureShader.ID);
-            glDeleteProgram(smoothFluidDepthHorizontalCS.ID);
-            glDeleteProgram(smoothFluidDepthVerticalCS.ID);
+            glDeleteProgram(smoothDepthCS.ID);
             glDeleteProgram(computeFluidNormalCS.ID);
+            glDeleteProgram(fixInvalidNormalsCS.ID);
         }       
 
 

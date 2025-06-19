@@ -12,8 +12,8 @@ namespace renderer {
         extern common::real deltaTime;
         extern Camera camera;
 
-        const unsigned int SCR_WIDTH = 1920 / 2;
-        const unsigned int SCR_HEIGHT = 1080 / 2;
+        const unsigned int SCR_WIDTH = 1920;
+        const unsigned int SCR_HEIGHT = 1080;
 
         int windowInit();
         int windowTerminate();
