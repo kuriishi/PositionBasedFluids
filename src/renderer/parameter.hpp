@@ -33,6 +33,7 @@ namespace renderer {
         extern float foamDensityScaler;
         extern int foamErodeKernelRadius;
         extern int foamErodeMinimunNeighborCount;
-        extern int edgeKernelRadius;
+        extern int edgeSize;
+        extern bool enableFixInvalidNormals;
     }
 }

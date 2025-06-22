@@ -86,6 +86,7 @@ namespace gui {
                 ImGui::Checkbox("Smooth Depth", &renderer::fluid::enableSmoothDepth);
                 ImGui::SliderInt("Smooth Iteration", &renderer::fluid::smoothIteration, 1, 256);
                 ImGui::Checkbox("Separate Bilateral Filter", &renderer::fluid::separateBilateralFilter);
+                ImGui::Checkbox("Fix Invalid Normals", &renderer::fluid::enableFixInvalidNormals);
                 static float particleRadiusScaler = renderer::fluid::particleRadiusScaler * 0.1f;
                 ImGui::SliderFloat("Particle Radius Scaler", &particleRadiusScaler, 0.0f, 1.0f);
                 renderer::fluid::particleRadiusScaler = particleRadiusScaler * 10.0f;
@@ -170,7 +171,7 @@ namespace gui {
 
                     ImGui::Separator();
 
-                    ImGui::SliderInt("Edge Kernel Radius", &renderer::fluid::edgeKernelRadius, 1, 16);
+                    ImGui::SliderInt("Edge Size", &renderer::fluid::edgeSize, 0, 16);
                 }
             }
 

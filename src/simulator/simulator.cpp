@@ -11,7 +11,7 @@ namespace simulator {
     int constraintProjectionIteration = 4;
     float viscosityParameter = 0.005f;
     float vorticityParameter = 0.0f; 
-    int maxNeighborCount = 160;
+    int maxNeighborCount = 256;
     common::real horizonMaxCoordinate = HORIZON_MAX_COORDINATE;
 
     int uLeft = 0;
@@ -629,7 +629,7 @@ namespace simulator {
         unsigned int index = 0;
         common::real x = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
         for (unsigned int i = 0; i < PARTICLE_COUNT_PER_EDGE_XZ; i++) {
-            common::real y = 20.0 * DIAMETER;
+            common::real y = 100.0 * DIAMETER;
             for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y / 2; j++) {
                 common::real z = 0.5 * HORIZON_MAX_COORDINATE - 5.0 * DIAMETER;
                 for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {
@@ -642,7 +642,7 @@ namespace simulator {
         }
         x = 0.5 * HORIZON_MAX_COORDINATE - 5.0 * DIAMETER;
         for (unsigned int i = 0; i < PARTICLE_COUNT_PER_EDGE_XZ; i++) {
-            common::real y = 20.0 * DIAMETER;
+            common::real y = 100.0 * DIAMETER;
             for (unsigned int j = 0; j < PARTICLE_COUNT_PER_EDGE_Y / 2; j++) {
                 common::real z = -0.5 * HORIZON_MAX_COORDINATE + 5.0 * DIAMETER;
                 for (unsigned int k = 0; k < PARTICLE_COUNT_PER_EDGE_XZ; k++) {

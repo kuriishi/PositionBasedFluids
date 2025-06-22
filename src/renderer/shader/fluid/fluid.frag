@@ -52,7 +52,7 @@ void main() {
     vec3 colorRefract = texture(uSceneColorTexture, texCoordRefract).rgb * attenuationFactor;
 
     // reflect
-    vec3 reflectDir = normalize((uViewTranspose * vec4(reflect(I, N), 0.0)).xyz);
+    vec3 reflectDir = normalize((uViewTranspose * vec4(reflect(-I, N), 0.0)).xyz);
     vec3 colorReflect = texture(uSkyboxTexture, reflectDir).rgb;
 
     // vec3 result = colorRefract;

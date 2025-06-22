@@ -2,12 +2,13 @@
 
 layout(local_size_x = 256) in;
 
-layout(binding = 0, r8i) uniform readonly iimage2D uFluidValidTexture;
-layout(binding = 1, r8i) uniform writeonly iimage2D uEdgeTexture;
+layout(binding = 5, r8i) uniform readonly iimage2D uValidTexture;
+layout(binding = 6, r8i) uniform writeonly iimage2D uEdgeTexture;
 
 uniform ivec2 uResolution;
-uniform int uKernelRadius;
-uniform int uMinimunNeighborCount;
+
+const int KERNEL_RADIUS = 1;
+const int MINIMUN_NEIGHBOR_COUNT = 8;
 
 void main() {
     uint index = gl_GlobalInvocationID.x;
@@ -17,14 +18,18 @@ void main() {
     }
 
     int validCount = 0;
-    for (int i = -uKernelRadius; i <= uKernelRadius; i++) {
-        for (int j = -uKernelRadius; j <= uKernelRadius; j++) {
-            if (imageLoad(uFluidValidTexture, texelCoord + ivec2(i, j)).r == 1) {
+    for (int i = -KERNEL_RADIUS; i <= KERNEL_RADIUS; i++) {
+        for (int j = -KERNEL_RADIUS; j <= KERNEL_RADIUS; j++) {
+            if (imageLoad(uValidTexture, texelCoord + ivec2(i, j)).r == 1) {
                 validCount++;
             }
         }
     }
-    if (validCount >= uMinimunNeighborCount) {
+
+    if (validCount > MINIMUN_NEIGHBOR_COUNT) {
+        imageStore(uEdgeTexture, texelCoord, ivec4(0));
+    }
+    else {
         imageStore(uEdgeTexture, texelCoord, ivec4(1));
     }
 }

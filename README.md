@@ -1,37 +1,68 @@
 [简体中文](README_zh.md)
 
-![pbf_32k](pbf_1_r.gif)
-<p align="center">showcase 1</p>
+---
 
-![pbf_32k_blend](pbf_2_r.gif)
-<p align="center">showcase 2</p>
+# Features
 
-![caustics](caustics.gif)
-<p align="center">caustics showcase 1</p>
+- Real-time position-based fluid simulation 
+- Real-time screen-space fluid rendering
+- Real-time water caustics using photon mapping
+- Real-time cartoon-style water and foam rendering
+- Simple GUI based on ImGui
+- Compute Shader-based workload distribution
 
-![caustcis2](caustics2.gif)
-<p align="center">caustics showcase 2</p>
+# Real-time Position-Based Fluid Simulation
 
-## Introduction
-Real-time fluid simulation based on 3D position, implemented with reference to the paper *Position based fluids* by Miles Macklin and Matthias Müller.
+Implemented based on the paper *"Position based fluids"* by Miles Macklin and Matthias Müller.
 
-Real-time screen-space fluid rendering, implemented with reference to the paper *Screen space fluid rendering with curvature flow* by W. J. van der Laan, S. Green, and M. Sainz.
+Derivation process: [see here](https://zhuanlan.zhihu.com/p/31850164166)
 
-Real-Time fluid caustics via image-space photon mapping, partially referencing the paper *Interactive image-space techniques for approximating caustics* by Chris Wyman and Scott Davis. 
+![pbf_1](showcase/pbf_1.gif)
 
-## Features
-Simulation powered by OpenGL Compute Shaders
+<p align="center"> Fluid Simulation Showcase 1 </p>
 
-Fluid rendering using point sprites (screen oriented quads)
+![pbf_2](showcase/pbf_2.gif)
 
-Caustics rendering via image-space photon mapping
+<p align="center"> Fluid Simulation Showcase 2 </p>
 
-ImGui-based user interface for performance monitoring, parameter tuning, and real-time interaction
+# Real-time Screen-Space Fluid Rendering
 
----- 
+Implemented based on the paper *"Screen space fluid rendering with curvature flow"* by W. J. van der Laan, S. Green, and M. Sainz.
 
-Fluid simulation algorithm derivation can be found [here](https://zhuanlan.zhihu.com/p/31850164166)
+Algorithm introduction: [see here](https://zhuanlan.zhihu.com/p/1896667370149352055)
 
-Fluid rendering algorithm introduction can be found [here](https://zhuanlan.zhihu.com/p/1896667370149352055)
+![fluid_1](showcase/fluid_1.gif)
 
-Fluid caustics algorithm introduction can be found [here](https://zhuanlan.zhihu.com/p/1916917420641199169)
+<p align="center"> Fluid Rendering Showcase 1 </p>
+
+![fluid_2](showcase/fluid_2.gif)
+
+<p align="center"> Fluid Rendering Showcase 2 </p>
+
+# Real-Time Water Caustics Using Photon Mapping
+
+Partially implemented based on the paper *"Interactive image-space techniques for approximating caustics"* by Chris Wyman and Scott Davis.
+
+Algorithm introduction: [see here](https://zhuanlan.zhihu.com/p/1916917420641199169)
+
+![caustics_1](showcase/caustics_1.gif)
+
+<p align="center"> Water Caustics Showcase 1 </p>
+
+![caustics_2](showcase/caustics_2.gif)
+
+<p align="center"> Water Caustics Showcase 2 </p>
+
+# Real-Time Cartoon-Style Water and Foam Rendering 
+
+Implemented based on Liordino dos S. Rocha Neto's papers *"Real-Time Screen Space Rendering of Cartoon Water"* and *"Cartoon Water Rendering with Foam and Surface Smoothing"*. 
+
+Algorithm introduction: [see here](https://zhuanlan.zhihu.com/p/1920252664308040967)
+
+![cartoon_1](showcase/cartoon_1.gif)
+
+<p align="center"> Cartoon Water & Foam Showcase 1 </p>
+
+![cartoon_2](showcase/cartoon_2.gif)
+
+<p align="center"> Cartoon Water & Foam Showcase 2 </p>

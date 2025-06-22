@@ -55,12 +55,14 @@ namespace renderer {
                 GLuint foamTexture;
                 GLuint erodedFoamTexture;
                 GLuint edgeTexture;
+                GLuint extendedEdgeTexture;
 
                 int renderCartoon();
                 int renderFoamTexture();
                 int renderFoam();
                 int erodeFoamTexture();
                 int computeEdgeTexture();
+                int extendEdgeTexture();
                 int renderEdge();
 
                 int copyParticleAttribute();

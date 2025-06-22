@@ -40,7 +40,8 @@ namespace renderer {
         float foamDensityScaler = 0.5f;
         int foamErodeKernelRadius = 4;
         int foamErodeMinimunNeighborCount = 64;
-        int edgeKernelRadius = 3;
+        int edgeSize = 1;
+        bool enableFixInvalidNormals = true;
 
         // common shaders
         Shader renderFluidShader;
@@ -59,6 +60,7 @@ namespace renderer {
         ComputeShader computeFluidNormalCS;
         ComputeShader erodeFoamTextureCS;
         ComputeShader edgeCS;
+        ComputeShader extendEdgeCS;
         ComputeShader fixInvalidNormalsCS;
 
         Fluid::Fluid(Camera& camera, unsigned int width, unsigned int height, std::shared_ptr<renderer::info::SceneInfo> sceneInfo) 
@@ -86,6 +88,7 @@ namespace renderer {
             computeFluidNormalCS = ComputeShader("src/renderer/shader/fluid/prepare/computeFluidNormal.comp");
             erodeFoamTextureCS = ComputeShader("src/renderer/shader/fluid/prepare/erodeFoamTexture.comp");
             edgeCS = ComputeShader("src/renderer/shader/fluid/prepare/edge.comp");
+            extendEdgeCS = ComputeShader("src/renderer/shader/fluid/prepare/extendEdge.comp");
             fixInvalidNormalsCS = ComputeShader("src/renderer/shader/fluid/prepare/fixInvalidNormals.comp");
             }
             ComputeShader erodeFoamTextureCS;
@@ -161,6 +164,7 @@ namespace renderer {
             repairedNormalViewSpaceTexture = utils::generateTextureRGBA32F(m_info->width, m_info->height);
 
             edgeTexture = utils::generateTextureR8I(m_info->width, m_info->height);
+            extendedEdgeTexture = utils::generateTextureR8I(m_info->width, m_info->height);
 
             // vertex array and buffer
             {
@@ -304,7 +308,9 @@ namespace renderer {
             computeFluidNormalCS.dispatchCompute(m_info->width * m_info->height);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-            fixInvalidNormals();
+            if (enableFixInvalidNormals) {
+                fixInvalidNormals();
+            }
 
             return 0;
         }
@@ -618,6 +624,7 @@ namespace renderer {
             glBindFramebuffer(GL_FRAMEBUFFER, FBO);
             
             if (displayMode == DisplayMode::FOAM) {
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT);
             }
             
@@ -634,15 +641,30 @@ namespace renderer {
 
         int Fluid::computeEdgeTexture() {
             edgeCS.use();
-            edgeCS.setInt("uKernelRadius", edgeKernelRadius);
             edgeCS.setIvec2("uResolution", glm::ivec2(m_info->width, m_info->height));
-            utils::bindTextureWithLayer0(m_info->validTexture, 0, GL_R8I, GL_READ_ONLY);
-            utils::bindTextureWithLayer0(edgeTexture, 1, GL_R8I, GL_WRITE_ONLY);
+            utils::bindTextureWithLayer0(m_info->validTexture, 5, GL_R8I, GL_READ_ONLY);
+            utils::bindTextureWithLayer0(edgeTexture, 6, GL_R8I, GL_WRITE_ONLY);
 
             edgeCS.dispatchCompute(m_info->width * m_info->height);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-            utils::copyTexture2D(edgeTexture, m_info->validTexture, m_info->width, m_info->height);
+            for (int i = 0; i < edgeSize; i++) {
+                extendEdgeTexture();
+            }
+
+            return 0;
+        }
+
+        int Fluid::extendEdgeTexture() {
+            extendEdgeCS.use();
+            extendEdgeCS.setIvec2("uResolution", glm::ivec2(m_info->width, m_info->height));
+            utils::bindTextureWithLayer0(edgeTexture, 6, GL_R8I, GL_READ_ONLY);
+            utils::bindTextureWithLayer0(extendedEdgeTexture, 7, GL_R8I, GL_WRITE_ONLY);
+
+            extendEdgeCS.dispatchCompute(m_info->width * m_info->height);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+            utils::copyTexture2D(extendedEdgeTexture, edgeTexture, m_info->width, m_info->height);
 
             return 0;
         }
@@ -651,24 +673,22 @@ namespace renderer {
             computeEdgeTexture();
 
             glBindFramebuffer(GL_FRAMEBUFFER, FBO);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            
+            glDepthFunc(GL_ALWAYS);
+
             renderEdgeShader.use();
             utils::bindTexture2D(renderEdgeShader, "uEdgeTexture", edgeTexture, 0);
 
             utils::drawScreenQuad();
 
+            glDepthFunc(GL_LESS);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
             return 0;
         }
 
         int Fluid::renderCartoon() {
-            // renderEdge();
-
             glBindFramebuffer(GL_FRAMEBUFFER, FBO);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            // glClear(GL_DEPTH_BUFFER_BIT);
 
             glEnable(GL_PROGRAM_POINT_SIZE);
             glEnable(GL_DEPTH_TEST);
@@ -707,7 +727,6 @@ namespace renderer {
             renderCartoonShader.setFloat("uRefractMax", refractMax);
             renderCartoonShader.setFloat("uReflectThreshold", reflectThreshold);
             renderCartoonShader.setFloat("uReflectMax", reflectMax);
-            renderCartoonShader.setInt("uEdgeKernelRadius", edgeKernelRadius);
 
             glBindVertexArray(VAO);
             glDrawArrays(GL_POINTS, 0, simulator::PARTICLE_COUNT);
@@ -717,6 +736,10 @@ namespace renderer {
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
             renderFoam();
+
+            if (edgeSize > 0) {
+                renderEdge();
+            }
 
             return 0;
         }

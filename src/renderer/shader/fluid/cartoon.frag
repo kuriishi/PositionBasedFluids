@@ -32,7 +32,6 @@ uniform float uRefractThreshold;
 uniform float uRefractMax;
 uniform float uReflectThreshold;
 uniform float uReflectMax;
-uniform int uEdgeKernelRadius;
 
 const vec2 POINT_CENTER = vec2(0.5, 0.5);
 
@@ -45,20 +44,6 @@ void main() {
         discard;
     }
     vec2 texCoords = gl_FragCoord.xy / vec2(uScreenSize);
-
-    vec2 delta = 1.0 / vec2(uScreenSize);
-    int validCount = 0;
-    for (int i = -uEdgeKernelRadius; i <= uEdgeKernelRadius; i++) {
-        for (int j = -uEdgeKernelRadius; j <= uEdgeKernelRadius; j++) {
-            if (texture(uValidTexture, texCoords + vec2(i, j) * delta).r == 1) {
-                validCount++;
-            }
-        }
-    }
-    if (validCount < (uEdgeKernelRadius * 2 + 1) * (uEdgeKernelRadius * 2 + 1)) {
-        fColor = vec4(vec3(0.0), 1.0);
-        return;
-    }
 
     vec3 normalViewSpace = texture(uNormalViewSpaceTexture, texCoords).xyz;
     vec3 normalWorldSpace = normalize((uViewTranspose * vec4(normalViewSpace, 0.0)).xyz);
@@ -111,7 +96,7 @@ void main() {
     vec3 finalColor = mix(quantizedColor, refractColor, refractFactor * exp(-thickness));
 
     // reflect
-    vec3 reflectDir = normalize((uViewTranspose * vec4(reflect(I, N), 0.0)).xyz);
+    vec3 reflectDir = normalize((uViewTranspose * vec4(reflect(-I, N), 0.0)).xyz);
     vec3 reflectColor = texture(uSkyboxTexture, reflectDir).rgb;
 
     finalColor = finalColor + reflectColor * reflectFactor;

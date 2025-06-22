@@ -66,14 +66,15 @@ namespace renderer {
             -1.0f, -1.0f,  1.0f,
             1.0f, -1.0f,  1.0f
         };
-        // std::vector<std::string> skyboxFacesRealistic = {
-        //     "resource/skybox/realistic/right.jpg",
-        //     "resource/skybox/realistic/left.jpg",
-        //     "resource/skybox/realistic/top.jpg",
-        //     "resource/skybox/realistic/bottom.jpg",
-        //     "resource/skybox/realistic/front.jpg",
-        //     "resource/skybox/realistic/back.jpg"
-        // };
+
+        std::vector<std::string> skyboxFacesRealistic = {
+            "resource/skybox/realistic/right.jpg",
+            "resource/skybox/realistic/left.jpg",
+            "resource/skybox/realistic/top.jpg",
+            "resource/skybox/realistic/bottom.jpg",
+            "resource/skybox/realistic/front.jpg",
+            "resource/skybox/realistic/back.jpg"
+        };
 
         std::vector<std::string> skyboxFacesCartoon = {
             "resource/skybox/cartoon/px.png",
@@ -83,8 +84,6 @@ namespace renderer {
             "resource/skybox/cartoon/pz.png",
             "resource/skybox/cartoon/nz.png"
         };
-
-        std::vector<std::string> skyboxFacesRealistic = skyboxFacesCartoon;
 
         // floor
         std::vector<float> floorVertices = {
@@ -191,9 +190,8 @@ namespace renderer {
             floorShader = Shader("src/renderer/shader/scene/floor/floor.vert", "src/renderer/shader/scene/floor/floor.frag");
 
             stbi_set_flip_vertically_on_load(false);
-            // floorTextureRealistic = utils::loadTexture("resource/floor/realistic.jpg");
+            floorTextureRealistic = utils::loadTexture("resource/floor/realistic.jpg");
             floorTextureCartoon = utils::loadTexture("resource/floor/cartoon.png");
-            floorTextureRealistic = floorTextureCartoon;
 
             // framebuffer
             {
